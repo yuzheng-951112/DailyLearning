@@ -1,0 +1,3424 @@
+cpu：始计算机的核心部件，它控制整个计算机的运作并进行运算，要想让一个个cpu运作，就必须向他它提供指令和数据
+存储器：指令和数据在存储器存放，也就是平时所说的内存
+磁盘：磁盘不同于内存，磁盘上的数据或程序如果不读到内存中，就无法被cpu使用
+存储单元：存储器被划分为若干个存储单元，每个存储单元从0开始顺序编号
+
+64位cpu 32位cpu就是表示cpu的寻址能力
+
+真正的64位要求 64位cpu 64位操作系统（比如win7系统） 64位软件
+
+***//一个cpu有n个地址总线，则可以说这个cpu的地址总线的宽度为n，这样的cpu最多可以寻找2的n次方个内存单元。
+***//数据总线的宽度决定了cpu和外界的数据传送速度
+***//多少根控制总线，就以为着cpu提供了对外部件的多少种控制，控制总线决定了cpu对外部器件的控制能力
+
+寄存器（cpu工作原理）
+8086有20位地址总线，可传送20位地址，寻址能力为1M
+8086内部为16位结构，它只能传送16位的地址，变现出的寻址能力只有64k
+段地址（16位）+偏移地址（16）通过地址加法器=物理地址（20位）
+物理地址=段地址*16+偏移地址
+比如：给定段地址为1000H，用偏移地址寻址，cpu的寻址范围为：10000h~1ffffh
+
+cpu有4个段寄存器：CD . DS . SS . ES
+CS和IP：CS和IP是8086中最关键的寄存器，他们指示了cpu当前要读取指令的地址  CS为段寄存器 IP为指令指针寄存器
+8086启动或复位后CS和IP被设置为CS=FFFFH，IP=0000H
+
+mov指令用法
+（1）mov 寄存器，数据
+（2）mov 寄存器，寄存器
+（3）mov 寄存器，内存单元
+（4）mov 内存单元，寄存器
+（5）mov 段寄存器，寄存器
+（6）mov 寄存器，段寄存器（ds，cs都可以）
+（7）mov 内存单元，段寄存器（ds，cs都行）
+*（8）mov 段寄存器，段寄存器（错误）  ;段寄存器中的数据不能直接传输到段寄存器中因为这里没有定义数据类型
+举例：
+	s:	mov es:[bx],ds:[bx]	
+		inc bx
+	loop s
+错误原因：这里的错误在于没有定义数据的类型，当用masm x.asm生成x.obj文件时会报错improper operand type，中文意思也就是：操作数类型不正确
+正确的书写方式应该是：
+1）数据传输是以字节为单位
+	s:	mov al,ds:[bx]
+		mov es:[bx],al
+		inc bx
+	loop s
+书写依据：这里是对字节单位进行数据传输，所以以al低8位当成媒介传输数据，传输完成之后inc bx bx的值+1 进入下次循环
+2）数据传输是以字为单位
+	s:	mov ax,ds:[bx]
+		mov es:[bx],ax
+		add bx,2
+	loop s
+书写依据：这里是对字单位进行数据传输，所以以ax16位当作媒介传输数据，传输完成之后mov bx,2 bx的值+2 进入下次循环
+
+注意：mov 内存，数据 是错误的，无法向内存直接写入数据 需要通过寄存器完成（这个与8一个道理传输数据前要通过通用寄存器来确定数据的类别）
+
+段寄存器SC与DS的区别：CS是的作用有指令和数据两个 DS只有数据一个
+
+push指令用法
+（1）push 通用寄存器
+（2）push 段寄存器地址：偏移地址
+
+例题：将10000H~1000FH这段空间当做栈，初始状态是空的，将AX.BX.DS中的数据入栈
+mov ax，1000
+mov ss，ax
+mov sp，0010
+push ax
+push bx
+push ds
+
+例题：  （1）将10000H~1000FH折段空间当作栈，初始状态是空的
+mov ax，1000
+mov ss，ax
+mov sp,0010
+	（2）设置AX=001AH,BX=001BH
+mov ax，001a
+mov bx，001b
+	（3）将ax，bx中的数据放入栈
+push ax
+push bx
+	（4）然后清零ax，bx
+mov ax，0000 （sub ax，ax）
+mov bx，0000 （aub bx，bx）
+	（5）从栈中恢复ax，bx原来的内容
+pop bx
+pop ax
+
+例题：  （1）将10000H~1000FH这段空间当作栈，初始状态是空的
+	（2）设置AX=002AH,BX=002BH
+	（3）利用栈，交换AX和BX中的数据
+mov ax,1000
+mov ss,ax
+mov ax,002a
+mov bx,002b
+push ax
+push bx
+pop ax
+pop bx
+
+例题：在10000H出写入字型数据2266H，可以用以下的代码完成
+方法一：
+mov ax，1000
+mov ds，ax
+mov ax，2266
+mov [0],ax
+
+方法二：
+mov ax，1000
+mov ss，ax
+mov sp，0002
+mov ax，2266
+mov ax
+
+注意：如果要建立10000H~1FFFFH这段空间当作栈段，SS=1000H,栈空间大小为64KB，栈最底部的字单元地址为1000：FFFFE,栈为空就相当于栈中唯一元素出栈，出栈后，SP=SP+2。
+SP原来为FFFFE,加二后SP=0，所以，当栈为空的时候，SS=1000H，SP=0
+
+编译器和debug处理 mov 通用寄存器，内存地址 是不一样的
+程序：
+mov ax,1000				;所以这里引入了[bx]  将mov al,[0]分解成 mov bx，0
+mov cs,ax				;				       mov al,[bx]
+mov al,[0]				;这样编译器和debug都能识别出程序且一样
+mov bl,[1]
+mov cl,[2]
+mov dl,[3]
+编译器处理时变成：
+mov ax,1000
+mov cs,ax
+mov al,0
+mov bl,1
+mov cl,2
+mov dl,3
+
+例题：编写2的12次方
+assume cs:code
+code segment
+
+	mov ax,2
+	mov cx,11
+s:  mov ax,ax
+    loop s
+
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end
+
+例题：用加法计算123*236，计算结果存在ax中
+assume cs:code
+code segment
+
+start:	mov ax,0
+		mov cx,123
+	s:	add ax,236	;-g ip直接过循环
+		loop s
+		
+	mov ax,4c00h
+	int 21h
+
+code ends
+end start
+
+例题：计算ffff：0006单元中的数乘以3，结果存储在dx中
+assume cs:code
+code segment
+
+start :	mov ax,0ffffh	;（在汇编源程序中，数据不能以字母开头，所以要在前面加0）
+		mov ds,ax
+		mov bx,6
+		mov al,[bx]
+		mov ah,0		;（这里不能省，因为无法确定计算机原来ah是否为0）
+		mov dx,0
+	
+		mov cx,3
+	s :	add dx,ax
+		loop s
+		
+		mov ax,4c00h
+		int 21h
+		
+code ends
+end start
+
+注意：在masm中
+	mov al,[0]   	;表示al=0
+	mov al,ds:[0]	;表示将以段地址ds偏移地址0的内存输入到ax底8位
+	mov al,[bx]		;表示将以段地址ds偏移地址0的内存输入到ax底8位
+	mov al,ds:[bx]	;将以短地址ds偏移地址bx的内存输入到ax底8位
+	
+例题：计算ffff:0~ffff:b单元中的数据的和，结果存储在dx中
+assume cs:code
+code segment
+
+start:	mov ax,0ffffh
+		mov ds,ax
+		mov bx,0
+		mov dx,0
+		
+		mov cx,12
+	s:	mov ax,0
+		mov al,[bx]
+		add dx,ax
+		inc bx
+		
+		
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end startmasm
+
+例题：将内存ffff：0~ffff：b段单元中的数据拷贝到0：200~0：200b单元中
+assume cs:code
+code segment
+
+start:	mov ax,0ffffh
+		mov ds,ax
+		mov ax,20h
+		mov es,ax
+		mov bx,0
+		
+		mov cx,12
+	s:	mov al,ds:[bx]
+		mov es:[bx],al
+		inc bx
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end start
+
+*例题：编程计算以下8个数据的和，结果存在ax寄存器中：
+0123H , 0456H , 0789H , 0ABCH , 0DEFH , 0FEDH , 0CBAH , 0987H
+assume cs:code
+code segment
+
+	dw 0123H,0456H,0789H,0ABCH,0DEFH,0FEDH,0CBAH,0987H ;dw定于的数据处于cs代码段的最开始地方ip=0分别对应的偏移地址为0 2 4 6。。。。
+	
+start:	mov bx,0		;这里一定要使用开始符start
+		mov ax,0
+		mov cx,0
+	s:	add ax,cs:[bx]
+		add bx,2
+	loop:	s
+	
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end start
+总结:cs作为命令段地址在用dw定义数据的时候，数据会被机器写成命令符，如果不加start指令开始符，cpu容易混响dw数据改变后的指令与start后的指令从而产生错误的指令，所以
+用start来区别前后保证指令的正确性（start是通过end start中的ecd伪指令在程序中去找start作为指令开始）
+
+例題:依次將8个字单元中的数据入栈，然后再依次出栈到这8个字单元中，从而实现数据的逆存放
+（1）用单段地址完成程序
+自己思考：
+assume cs:code
+code segment
+
+		dw:0123H,0456H,0789H,0ABCH,0DEFH,0FEDH,0CBAH,0987H
+	
+start:	mov ax,1000h
+		mov ss,ax
+		mov sp,10h		；dw为8个数 一共有16个字节 对应的地址位16个字节0~15 根据栈的特性 数据存储栈的最大地址+1
+		mov bx,0
+		
+		mov cx,8
+	s:	push cs:[bx]	；push可以直接将内存数据放入栈中
+		add bx,2
+	loop s
+		
+		mov bx,0
+		mov cx,8
+	b:	pop cs:[bx]		；pop代表出站 pop后面对应的是出栈后存储的位置
+		add bx,2
+	loop b
+
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end start
+作者给出答案：
+assume cs:code
+code segment
+
+		dw:0123H,0456H,0789H,0ABCH,0DEFH,0FEDH,0CBAH,0987H
+		dw:0,0,0,0,0,0,0,0
+		
+start:	mov ax,cs
+		mov ss,ax
+		mov sp,32
+		mov bx,0
+		
+		mov cx,8
+	s:	push cs:[bx]
+		add bx,2
+	loop s
+	
+		mov bx,0
+		mov cx,8
+	b:	pop cs:[bx]
+		add bx,2
+	loop b
+	
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end start
+（2）用多段地址完成程序
+assume cs:code,ss:stack,ds:data
+data segment
+		dw:0123H,0456H,0789H,0ABCH,0DEFH,0FEDH,0CBAH,0987H
+data ends
+
+stack segment
+		dw:0,0,0,0,0,0,0,0
+stack ends					;通过ends来找寻程序的入口
+		
+code segment
+start：	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ax,data
+		mov ds,ax
+		mov bx,0
+		
+		mov cx,8
+	s:	push [bx]
+		add bx,2
+	loop s
+	
+		mov bx,0
+		mov cx,8
+	b:	pop [bx]
+		add bx,2
+	loop b
+	
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end start
+注意：系统不准将一个数据直接送入段寄存器
+
+实验题：
+（1）将下面的程序编译连接，用debug加载.跟踪，然后回答问题
+assume cs:code,ds:data,ss:stack
+
+data segment
+	dw 0123H,0456H,0789H,0ABCH,0DEFH,0FEDH,0CBAH,0987H
+data ends
+
+stack segment
+	dw 0,0,0,0,0,0,0,0
+stack ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		
+		mov ax,data
+		mov ds,ax
+		
+		push ds:[0]
+		push ds:[2]
+		pop ds:[2]
+		pop ds:[0]
+		
+		mov ax,4c00h
+		int 21h
+code ends
+end start
+1）cpu执行程序，程序返回前，data段中的数据为多少？
+答：0123H,0456H,0789H,0ABCH,0DEFH,0FEDH,0CBAH,0987H
+2)cpu执行程序，程序返回前，cs=076C,ss=076B，ds=076A
+3）设程序加载后，code段的段地址为X,则data段的段地址为X-2,stack段的段地址为X-1
+（2）将下面程序编译.连接，用debug加载.跟踪，然后回答问题
+assume cs:code,ds:data,ss:stack
+
+data segment
+	dw 0123H,0456H
+data ends
+
+stack segment
+	dw 0,0
+stack ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		
+		mov ax,data
+		mov ds,ax
+		
+		push ds:[0]
+		push ds:[2]
+		pop ds:[2]
+		pop ds:[0]
+		
+		mov ax,4c00h
+		int 21h
+code ends
+end start
+1）cpu执行程序，程序返回前，data段中的数据为多少？
+答：0123H,0456H
+2)cpu执行程序，程序返回前，cs=076C,ss=076B，ds=076A
+3）设程序加载后，code段的段地址为X,则data段的段地址为X-2,stack段的段地址为X-1
+4）对于如下定义的段：
+name segment
+……
+name ends
+如果段中的数据占N个字节则程序加载后，该段实际占用的空间为[（N/16）+1]*16
+（3）将下面的程序编译.连接，用debug加载.跟踪，然后回答问题
+assume cs:code,ds:data,ss:stack
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		
+		mov ax,data
+		mov ds,ax
+		
+		push ds:[0]
+		push ds:[2]
+		pop ds:[2]
+		pop ds:[0]
+		
+		mov ax,4c00h
+		int 21h
+code ends
+
+data segment
+	dw 0123H,0456H
+data ends
+
+data segment
+	dw 0123H,0456H
+data ends
+
+end start
+1）cpu执行程序，程序返回前，data段中的数据为多少？
+答：0123H,0456H
+2)cpu执行程序，程序返回前，cs=076C,ss=076B，ds=076A
+3）设程序加载后，code段的段地址为X,则data段的段地址为X+3,stack段的段地址为X+4
+4）如果将（1）.（2）.（3）题中的最后一条伪指令“end start”改为“end”（也就是说不指明程序的入口），则哪个程序仍然可以争取执行？
+答：底（3）个程序可以执行，在没有end start后cpu按从上往下的顺序执行程序，正好（3）的首为是code segment机器码指令为可读
+5）程序如下，编写code段中的代码，将a段和b段中的数据依次相加，将结果存到c段中
+assume cs:code
+
+a segment
+	db 1,2,3,4,5,6,7,8
+a ends
+
+b segment
+	db 1,2,3,4,5,6,7,8
+b ends
+
+c segment
+	db 0,0,0,0,0,0,0,0
+c ends
+
+code segment
+start:	mov ax,a
+		mov ds,ax
+		mov bx,0
+		mov ax,b
+		mov es,ax
+		mov ax,c
+		mov ss,ax
+		
+		mov cx,8
+	s:	add ds:[bx],es:[bx]
+		mov ss:[bx],ds:[bx]
+		inc bx
+	loop s
+
+code ends
+
+end start
+（6）编写code段中的代码，用push指令将a段中的前8个字型数据，逆序存储到b段中
+assume cs:code
+
+a segment
+	dw 1,2,3,4,5,6,7,8,9,0ah,0bh,0ch,0dh,0eh,0fh,0ffh
+a ends
+
+b segment
+	dw 0,0,0,0,0,0,0,0
+b ends
+
+code segment
+start:	mov
+
+例题：将'BaSiC'和'iNfOrMaTiOn'中的大写转换为小写
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 'BaSiC'
+	db 'iNfOrMaTiOn'
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		
+		mov cx,5
+	s:	mov al,[bx]
+		and al,11011111b		;利用了大写与小写二进制下的差别，小写情况下a为011000001B，大写情况下a为010000001B，利用and指令对大小写第6位进行转换
+		mov [bx],al
+		inc bx
+	loop s
+
+		mov bx,5
+		mov cx,11
+	b:	mov al,[bx]
+		and al,11011111b
+		mov [bx],al
+		inc bx
+	loop b
+		
+	mov ax,4c00h
+	int 21h
+
+codesg ends
+end start
+
+例題:用寄存器SI和DI实现将字符串‘welcome to masm！’复制到他后面的数据区中
+方法一：代码较多
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 'welcome to masm!'
+	db '................'
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov si,0
+		mov di,16
+		
+		mov cx,16
+	s:	mov ax,ds:[si]		;si和di是不能分成两个8位的字节的，只能以16位的形式存在
+		mov ds:[di],ax  
+		add si,2
+		add di,2
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+方法二：用数组的思想
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 'welcome to masm!'
+	db '................'
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		
+		mov cx,16
+	s:	mov al,ds:[bx]
+		mov ds:[bx+16],al
+		inc bx
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+例题：编程将datasg段中的美个单词的头一个字母改成大写字母
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db '1.file          '
+	db '2.edit          '
+	db '3.search        '
+	db '4.view          '
+	db '5.options       '
+	db '6.help          '
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,2
+		
+		mov cx,0
+	s:	mov al,ds:[bx]
+		and al,11011111b
+		mov ds:[bx],al
+		add bx,16
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+		
+例题：将datasg段中的每个单词该成大写字母
+方法一：基本方法
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 'ibm             '
+	db 'dec             '
+	db 'dos             '
+	db 'vax             '
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		
+		mov cx,4
+	s:	mov al,ds:[bx]
+		and al,11011111b
+		mov ds:[bx],al
+		mov al,ds:[bx+1]
+		and al,11011111b
+		mov ds:[bx+1],al
+		mov al,ds:[bx+2]
+		and al,11011111b
+		mov ds:[bx+2],al
+		add bx,16
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+方法二：双层循环（通过寄存器dx保存数据）
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 'ibm             '
+	db 'dec             '
+	db 'dos             '
+	db 'vax             '
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		mov si,0
+		
+		mov cx,4
+	s:	mov dx,cx			;这里需要对外层的循环次数进行保存，防止内层循环时设定循环次数对要层的改变 即：mov cx,3覆盖了mov cx,4
+		mov cx,3	
+	s0:	mov al,ds:[bx+si]
+		and al,11011111b
+		mov ds:[bx+si],al
+		inc si
+	loop s0
+		add bx,16
+		mov,cx,dx			;这里需要对外层的循环次数进行释放，以次mov cx,4进入外层循环
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+方法三：双层循环（通过一段内存保存数据）
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 'ibm             '
+	db 'dec             '
+	db 'dos             '
+	db 'vax             '
+	dw 0
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		mov si,0
+		
+		mov cx,4
+	s:	mov ds:[40h],cx			;这里需要对外层的循环次数进行保存，防止内层循环时设定循环次数对要层的改变 即：mov cx,3覆盖了mov cx,4
+		mov cx,3	
+	s0:	mov al,ds:[bx+si]
+		and al,11011111b
+		mov ds:[bx+si],al
+		inc si
+	loop s0
+		add bx,16
+		mov,cx,ds:[40h]			;这里需要对外层的循环次数进行释放，以次mov cx,4进入外层循环
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+*方法四：双层循环（通过栈来保存数据）    ;这也是保存数据的常见用法，用栈能保证存储数据更加干净
+assume cs:codesg,ds:datasg,ss:stack
+
+datasg segment
+	db 'ibm             '
+	db 'dec             '
+	db 'dos             '
+	db 'vax             '
+datasg ends
+
+stack segment
+	dw 0,0,0,0,0,0,0,0
+stack ends
+
+codesg segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		mov si,0
+		
+		mov cx,4
+	s:	push cx			;这里需要对外层的循环次数进行保存，防止内层循环时设定循环次数对要层的改变 即：mov cx,3覆盖了mov cx,4
+		mov cx,3	
+	s0:	mov al,ds:[bx+si]
+		and al,11011111b
+		mov ds:[bx+si],al
+		inc si
+	loop s0
+		add bx,16
+		pop cx			;这里需要对外层的循环次数进行释放，以次mov cx,4进入外层循环
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+例题:编程将datasg段中每个单词的前四个字母改为大写字母:
+assume cs:codesg,ds:datasg,ss:stacksg
+
+stacksg segment
+	dw 0,0,0,0,0,0,0,0
+stacksg ends
+
+datasg segment
+	db '1.display.......'
+	db '2.brwos.........'
+	db '3.replace.......'
+	db '4.modify........'
+datasg ends
+
+codesg segment
+start:	mov ax,stacksg
+		mov ss,ax
+		mov sp,16
+		mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		mov si,2
+		
+		mov cx,4
+	s:	push cx
+		
+			mov cx,4
+		s0:	mov al,ds:[bx+si]
+			and al,11011111b
+			mov ds:[bx+si],al
+			inc si
+		loop s0
+		
+		add bx,16
+		pop cx
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+例题：对前后信息进行修改				在内存中如下存放
+82年：	公司名称：EDC			seg:60	+00
+		总裁名字：Ken Olsen					'DEC'
+		排名：137						+03
+		收入：40							'Ken Olsen'
+		著名产品：PDP					+0C
+88年	公司名称：EDC						'137'
+		总裁名字：Ken Olsen				+0E
+		排名：38							'40'
+		收入：110						+10
+		产品名称：VAX						'PDP'
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 'EDC'
+	db 'Ken Olsen'
+	db 89h,00h
+	db 28h,00h
+	db 'PDP'
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		
+		mov word ptr ds:[bx+0ch],38
+		add word ptr ds:[bx+0eh],70
+
+		mov byte ptr ds:[bx+si],'v'
+		inc si
+		mov byte ptr ds:[bx+si],'A'
+		inc si
+		mov byte ptr ds:[bx+si],'X'
+		
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+32位除法 div ax（寄存器）			;32位除法要求被除数32位，除数16位
+		 div ds:[bx] （内存地址）
+eg div word ptr ds:[bx+si+idata]
+含义为：（ax）=[（dx）*10000H+（ax）]/（（ds）*16+（bx）+（si）+idata）的商		;[（dx）*10000H+（ax）]代表的是一个数值，（（ds）*16+0）代表的是一个地址，要取其中的值
+		（dx）=[（dx）*10000H+（ax）]/（（ds）*16+（bx）+（si）+idata）的余数
+例题:利用除法指令计算100001/100  65536
+方法一：通过div 寄存器
+assume cs:codesg
+
+codesg segment
+start:	mov dx,1h
+		mov ax,86a1h
+		mov bx,100
+		div bx
+		
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+方法二：通过div 内存地址
+assume cs:codesg,ds:datasg
+
+datasg segment
+	dw 0064h
+datasg ends
+	
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov dx,1h
+		mov ax,86a1h
+		div	word ptr ds:[0]
+		
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+16位除法 div ax（寄存器）			;16位要求被除数是16位，除数是8位
+ 		 div ds:[bx] （内存地址）
+eg div byte ptr ds:[0]
+含义为：（al）=（ax）/（（ds）*16+（bx）+（si）+idata）的商
+		（al）=（ax）/（（ds）*16+（bx）+（si）+idata）的余数
+例题：编程利用除法计算1001/100
+方法一：通过div 寄存器
+assume cs:codesg
+
+codesg segment
+start:	mov ax,1001d
+		mov bl,100d
+		div bl
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+方法二：通过div 内存地址
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 100d
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov ax,1001d
+		mov bx,0
+		div byte ptr ds:[bx]
+		
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+例题：用div计算data段中第一个数据除以第二个数据后的结果，商存放在第3个数据的存储单元中。
+assume cs:codesg,ds:datasg
+
+datasg segment
+	dd 100001d
+	dw 100d
+	dw 0
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		mov ax,ds:[bx]			;这里32位存储方式和16位相似0~1低16位，2~3高16位
+		mov dx,ds:[bx+2]
+		div word ptr ds:[bx+4]
+		mov ds:[bx+6],ax
+		
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+关于dup的用法：
+（1）db 3 dup（0）		;定义了3个字节，他们的值都是0，相当于db 0,0,0
+（2）db 3 dup（0,1,2）	;定义了9个字节，他们是0,1,2,0,1,2,0,1,2
+	db 重复的次数 dup（重复的字节型数据）
+
+assume cs:codesg
+
+datasg segment
+	db '1975','1976','1977','1978','1979','1980','1981','1982','1983'
+	db '1984','1985','1986','1987','1988','1989','1990','1991','1992'
+	db '1993','1994','1995'
+	dd 16,22,382,1356,2390,8000,16000,24486,50065,97479,140417,197514
+	dd 345980,590827,803530,1183000,1843000,2759000,3753000,4649000,5937000
+	dw 3,7,9,13,28,38,130,220,476,778,1001,1442,2258,2793,4037,5635,8226
+	dw 11542,14430,15257,17800
+datasg ends
+
+table segment
+	db 21 pud('yaer summ ne ??')
+table ends
+
+stacksg segment
+	dw 0
+stacksg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov ax,table
+		mov es,ax
+		mov si,0
+		mov di,0
+		
+		mov cx,21
+	s:	push cx
+		mov bx,0
+			mov cx,4
+		s0:	mov al,ds:[bx+si]
+			mov es:[bx+di],al
+			inc bx
+		loop s0
+		add si,4
+		add di,16
+		pop cx
+	loop s
+		
+		mov 
+
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+操作符offse（跳转指令）
+assume sc:codesg
+
+codesg segment
+start:	mov ax,offset start 	;mov 指令下的程序是三个字节，start相当于程序的开始（0） 这里的mov ax,offset start相当于mov ax，0
+	s:	mov ax,offset s0		;s循环是从（3）开始，这里的mov ax,offset s0相当于mov ax,0
+
+codesg ends
+end start
+
+例题：添加两条指令，使该程序在运行中将s处的一条指令恢复到s0处
+assume cs:codesg
+codesg segment
+	s:	mov ax,bx				;mov ax,ba							占两个字节
+		mov si,sffset s 		;相当于mov si,s处地址 				占三个字节
+		mov di,offset s0		;相当于mov di,s0处地址				占三个字节
+		mov ax,cs:[si]			;相当于mov ax,si地址下的执行指令	占三个字节
+		mov cs:[di],ax			;相当于mov cs:[di],寄存器ax中的数据（也就是si中的指令）	占三个字节
+	s0:	nop
+		nop
+codesg ends
+end s
+
+原码，反码，补码
+原码：最高位表示数的符号，其他表示数值
+例:[+7]原=00000111B		[-7]原=10000111B
+反码：
+（1）正数的反码和原码相同
+	例:[+7]反=00000111B=[+7]原
+（2）负数的反码是由其原码的符号位不变，其余位按位取反
+	例:[-7]反=11111000B
+补码:
+（1）正数的补码和原码相同
+	例:[+7]补=00000111B=[+7]原
+（2）负数的补码是由其原码的符号位置不变，其余位按位取反，再在最低位加1
+	例:[-7[补=11111001B
+	
+操作符jmp short 标号（转到标号处执行指令）	;转移的ip范围只有-128~127
+操作符jmp near ptr 标号 					;转移范围为-32769~23767
+操作符jmp far ptr 标号						;段之间的跳转
+操作符jmp dword ptr cs:ip
+操作符jmp word ptr ax（寄存器）只能16位		;寄存器中放入ip地址
+
+jmp用法的补充与总结：
+（1）直接用法（只能在Debug下使用的汇编指令）
+jmp 段地址：偏移地址
+功能:修改cs.ip的内容
+例子:	jmp 55BA:8
+执行后:（cs）=55EAH,（ip）=0008H
+（2）根据标号进行转移的用法：
+1）转移的目的地址不在指令中，依据位移进行转移（段内转移）
+a.jmp short 标号（ip转移范围为-128~127）
+功能:（ip）=（ip）+8位位移
+b.jmp near ptr 标号（ip转移范围为-32768~32767）
+功能:（ip）=（ip）+16位位移
+注:依据位移进行的转移是段内转移，位移=标号处的地址-jmp指令后的第一个字节的地址
+2）转移的目的地址在指令中（段间转移）
+jmp far ptr 标号 
+功能:用标号的段地址和偏移地址修改cs和ip
+	（cs）=标号所在的段地址；（ip）=标号所在的偏移地址
+（3）转移地址在寄存器中的用法:
+jmp 某一合法寄存器
+功能:用寄存器中的值修改ip
+例子:jmp ax（寄存器）
+执行后:（ip）=（ax）
+（4）转移地址在内存中的用法:
+1）jmp word ptr内存单元地址（段内转移）
+功能:从内存单元地址出开始存放着一个字，是转移的目的偏移地址
+例子:	mov ax,0123H
+		mov [bx],ax
+		jmp word ptr [bx]
+执行后:（ip）=0123H
+2）jmp dword ptr 内存单元地址（段间转移）
+功能:从内存单元地址处开始放着两个字，高地址处的字是转移的目的段地址，低地址处是转移的目的偏移地址
+例子:	mov ax,0123H
+		mov [bx],ax
+		mov word ptr [bx+2],0
+		jmp dword ptr [bx]
+执行后:（cs）=0 , （ip）=0123H
+
+检测点9.1
+（1）程序如下
+assume cs:code
+
+data segment
+	____________
+data ends
+
+code segment
+start:	mov ax data
+		mov ds,ax
+		mov bx,0
+		jmp word ptr [bx+1]				;word ptr [bx+1]指的是一个字单元，也就是说是2个字节，也就是说在data段中是第2和第3个字节
+code ends
+end start
+弱要使程序中的jmp指令执行后，CS:IP指向第一条指令，在data段中应该定义哪些数据
+答:data segment
+		dw xx,0,xx....		（第二个数据的值为0）
+		data ends
+程序分析：
+    1) 这个指令jmp word ptr [bx+1]是一个段内近转移，它只是修改了ip的值。它的转移地址在内存中。明确：[bx+1]在此例子中是只的data段的第二个字节。
+    2）我们发现ds：bx指向了data段，word ptr [bx+1]指向的是data段中的第二个字节开始的字单元，也就是说它所指向的该字单元的内容。这个内容就是jmp跳转的偏移地址。
+    3）word ptr [bx+1]指的是一个字单元，也就是说是2个字节，也就是说在data段中是第2和第3个字节，如果jmp转移到程序第一条指令，也就是说ip的值应为：00 00即可；我们要保证这二个
+	字节的值是00 00就行。
+    4）要想jmp跳转到start标号处，它的ip值是offset start即可（在汇编语言层面我们也不必关心它们代表的具体ip值是多少）；也就是说：（ds：[bx+1]）==offset start，那么在data段中
+	定义的第二个字节必须是offset start。至于offset start具体代表的二进制码是什么，那是编译器的事情。
+	5)简单来说就是，只要ds:[bx+1]起始地址的两个字节为0就可以了
+	
+（2）程序如下
+assume cs:code
+
+data segment
+	dd 12345678H
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		mov bx,0
+		mov [bx],____
+		mov [bx+2],____
+		jmp dword ptr ds:[0]		;dword ptr ds:[0]指的是一个双字单元，也就是说是两个字，也就是说在data段中2~3字高16位表示段地址cs，0~1字低16位表示偏移地址ip
+code ends
+end start
+答案	mov	[bx],offset start（bx.0000h）			;这里只要代表偏移地址是零就行
+		mov [bx+2],code（cs）						;这里只要代表段地址是零就行
+分析 1）在data段中定义了一个双字的值，占用4个字节，内存中是12 34 56 78
+     2）jmp dword ptr ds:[0]代表的含义是，此指令是段间转移的指令，cs和ip是存储在一个双字的单元中，其中高16位存储的是cs值，低16位存储的是ip值。
+     3） [bx]代表了低16位的值==ip。[bx+2]代表了高16位的值==cs。
+     4）也就是说保证data段中前2个字节是ip的值，第3,4字节是cs的值就可以
+
+（3）用debug查看内存单元结果如下
+2000:1000 BE 00 06 00 00 00 ....
+则此时，CPU执行指令：
+	mov ax,2000h
+	mov es,ax
+	jmp dword ptr es:[1000h]
+后，（cs）=	0006	（ip）=00BE
+
+*关于9.1检测题的一个延伸用
+用debug查看内存单元结果如下
+2000:1000 BE 00 06 00 00 00 ....
+则此时，CPU执行指令：
+	mov ax,2000h
+	mov es,ax
+	jmp dword ptr es:[1000h]
+后，（cs）=	0006	（ip）=00BE
+整个程序：
+assume cs:codesg
+
+codesg segment
+start:	mov ax,2000h
+		mov ds,ax
+		mov bx,1000h
+		mov al,190d
+		mov ds:[bx],al
+		mov al,06
+		mov ds:[bx+2],al
+		
+		mov ax,2000h
+		mov es,ax					
+		（es:）						;在masm下不需要es:指令,因为有了es:[1000h]的强制段地址，但是debug下机器无法识别（没有jmp dword ptr es:[1000h]指令）
+		jmp dword ptr es:[1000h]	;在debug下jmp dword ptr和masm用法不同，这里的jmp dword ptr应该改成jmp far ptr
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+jcxz指令:	（范围-128~127）
+指令格式:	jcxz 标号（如果（cx）=0，则转移到标号处执行）
+
+检测点9.2
+补全编程，利用jcxz指令，实现在内存段中查找第一个值为0的自己，找到后，将他的偏移地址存放在dx中
+assume cs:code
+
+code segment
+start:	mov ax,2000h
+		mov ds,ax
+		mov bx,0
+	s:	__________
+		__________
+		__________
+		__________
+		jmp short s
+	ok:	mov dx,bx
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+答案：
+		mov cl,ds:[bx]	;这里不能写成 mov byte ptr cx,ds:[bx] 
+		mov ch,0
+		jcxz ok
+		inc bx
+		
+loop指令:	（范围-128~127）
+指令格式:	s:
+			loop s	 （如果（cx）=0，跳出loop）
+			
+检测点9.3
+补全编程，利用loop指令，实现在内存2000h段中查找第一个为0的字节，找到后，将他的偏移地址存储在dx中
+assume cs:code
+
+code segment
+start:	mov ax,2000h
+		mov ds,ax
+		mov bx,0
+	s:	mov cl,[bx]
+		mov ch,0
+		__________
+		inc bx
+	loop s
+	
+	ok:	dec bx			;dec指令的功能和inc相反，dec bx进行的操作为：（bx）=（bx）-1
+		mov dx,bx
+		
+	mov 4c00h
+	int 21h
+code ends
+end start
+答案：
+		inc cx			;loop语句在loop 隐含处理 dec cx然后进行判断cx是否为0，如果为零跳出循环进入下一步
+分析:和检测点9.2不同的地方在于这里loop语句情况下要求cx为1，在loop语句自减下谈论是否为0；而jcxz语句则是直接判断cx是否为0
+
+jmp short 标号
+jmp near ptr 标号
+jcxz 标号
+loop 标号
+总结:它们的转移都没有涉及目标地址,而是涉及目标地址和转移起始地址之间的位移,具有通用性
+
+分下下面的程序:
+C:\DOCUME~1\ADMINI~1>debug e:\code\testJmp.exe
+-U
+0C16:0005 B80000        MOV     AX,0000
+0C16:0008 90            NOP
+0C16:0009 90            NOP
+0C16:000A BF0800        MOV     DI,0008
+0C16:000D BE2000        MOV     SI,0020
+0C16:0010 2E            CS:
+0C16:0011 8B04          MOV     AX,[SI]
+0C16:0013 2E            CS:
+0C16:0014 8905          MOV     [DI],AX
+0C16:0016 EBF0          JMP     0008
+0C16:0018 B80000        MOV     AX,0000
+0C16:001B CD21          INT     21
+0C16:001D B80000        MOV     AX,0000
+0C16:0020 EBF6          JMP     0018
+0C16:0022 90            NOP
+0C16:0023 B206          MOV     DL,06
+-
+
+assume cs:codesg  	       ;实验8主要考察对jmp本质含义的理解：跳转相对位移
+ 
+codesg segment
+	mov ax,4c00h
+	int 21h
+	
+ 
+start:      				;程序入口处
+	mov ax,0
+ 
+s:
+	nop      				;nop指令占一个字节
+	nop
+	
+	mov di,offset s         ;di 指向标号s的偏移地址
+	mov si,offset s2		;si 指向标号s2的偏移地址
+	mov ax,cs:[si]			;将CS:[SI]即s2处的指令存储到ax中 ，也就是jmp  short s1,就我这次运行过程而言，对应机器指令：EBF6，
+							;机器指令EBF6解释：EB即jmp，F6（1111 0110 ）最高位为1，表示往回跳，
+							;(看s1发现，实际就是往前跳两条mov指令+一条int 21h指令),
+	mov cs:[di],ax			;将ax处存储的指令EBF6存储到cs:[di]即标号s的起始处，覆盖掉两个nop（两个字节），
+							;需要明白EBF6的本质含义是往回前跳三条指令（两条mov+ 一条int）,而不是如s2中表面显示的jmp s1，
+							;实际这时是jmp到 codesg 段的起始处：mov ax,4c00h
+		
+ 
+s0:
+	jmp short s	      		 ;至此，跳回s，首先执行s起始处的EBF6,程序往前跳三条指令，依次执行mov ax,4c00h  int 21h，程序正常结束，退出
+	
+ 
+s1:
+	mov ax,0
+	int 21h
+	mov ax,0
+	
+s2:
+	jmp short s1
+	nop
+	
+codesg ends
+end start
+总结分析:首先 offset s 和 offset s2表示 s处 和 s2 的偏移地址，执行s段语句后完成了将s2的指令复制到s处的nop处（正好nop两字节），然后执行s0语句 jmp short s跳回s段
+		 语句，最后执行复制到nop上的jmp short s1（对应的debug是EBF0），指令的意义是网上条三个语句（s1和s2中间正好三个语句），调到开头的mov ax,4c00h int 21结束
+		 
+ret和retf
+（一）ret指令用栈中的数据，修改ip的内容，从而实现近转移动
+cpu执行ret指令时，进行下面两部操作：
+（1）（ip）=（（ss）*16+（sp））
+（2）（sp）=（sp）+2
+（二）retf指令用栈中的数据，修改cs和ip的内容，从而实现远转移
+（1）（ip）=（（ss）*16+（sp））
+（2）（sp）=（sp）+2
+（3）（cs）=（（ss）*16（sp））
+（4）（sp）=（sp）+2
+
+ret指令举例:
+assume cs:codesg
+
+stack segment
+	db 16 dup (0)
+stack ends
+
+codesg segment
+	mov ax,4c00h
+	int 21h
+
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ax,0
+		
+		push ax
+		
+		ret			;这里取栈的最高位为ip地址
+codesg ends
+end start
+
+retf指令举例:
+assume cs:codesg
+
+stack segment
+	db 16 dup (0)
+stack ends
+
+codesg segment
+	mov ax,4c00h
+	int 21h
+
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ax,0
+		push cs
+		push ax
+		
+		retf
+codesg ends
+end start
+
+检测点10.1
+补全程序，实现从内存1000：0000处开始执行指令
+assume cs:code
+
+stack segment
+	db 16 dup （0）
+stack ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ax,__________
+		push ax
+		mov ax,__________
+		push ax
+		retf
+code ends
+end start
+答案：	mov ax,1000h
+		mov ax,0
+		
+call指令
+call 标号（将当前的ip压栈后，转到标号出执行指令）
+执行call指令时，进行如下操作
+（1）（sp）=（sp）-2
+     （（ss）*16+（sp））=（ip）
+（2）（ip）=（ip）+16位位移	 
+
+检测点10.2
+下面的程序执行后，ax中的数值为多少？
+内存地址		机器码			汇编指令
+1000:0			b8 00 00		mov ax,0
+1000:3			e8 01 00		call s
+1000:6			40				inc ax
+1000:7			58				s:pop ax
+答案：ax的值为6
+
+call far ptr 标号
+（1）（sp）=（sp）-2
+	 （（sp）*16+（sp））=（cs）
+	 （sp）=（sp）-2
+	 （（ss）*16+（sp））=（ip）
+（2）（cs）=标号所在的段地址
+	 （ip）=标号所在的偏移地址
+	 
+检测点10.3
+下面的程序执行后，ax中的数值为多少？
+内存地址		机器码			汇编指令
+1000:0			b8 00 00		mov ax,0
+1000:3			9a 09 00 00 10	call far ptr s
+1000:8			40				inc ax
+1000:9			58				s:pop ax
+								add ax,ax
+								pop bx
+								add ax,bx
+答案：ax的值为1016
+
+call 16位寄存器
+功能：（sp）=（sp）-2
+	  （（ss）*16+（sp））=（ip）
+	  （ip）=（16位寄存器）
+	  
+检测点10.4
+下面的程序执行后，ax中的数值为多少？
+内存地址		机器码			汇编指令
+1000:0			b8 06 00		mov ax,6
+1000:3			ff d0			call ax    
+1000:5			40				inc ax
+1000:6							mov bp,sp			;sp和bp的区别在于sp只能指向栈定，而bp可以指向栈中的其他位置
+								add ax,[bp]
+答案：ax的值为11
+
+call word ptr 内存单元地址
+汇编语法解释：
+	push ip
+	jmp word ptr 内存单元地址
+比如下面的指令：
+	mov sp,10h
+	mov ax,0123h
+	mov ds:[0],ax
+	call word ptr ds:[0]
+执行后（ip）=0123h，（sp）=0eh
+call dword ptr 内存单元地址
+汇编语法解释：
+	push cs
+	push ip
+	jmp dword ptr 内存单元地址
+比如，下面的指令：
+	mov sp,10h
+	mov ax,0123h
+	mov ds:[0],ax
+	mov word ptr ds:[2],0
+	call dword ptr ds:[0]
+执行后（cs）=0，O（ip）=0123h，（sp）=och
+
+检测点10.5
+（1）下面的程序执行后，ax中的值为多少
+assume cs:code
+
+stack segment
+	dw 8 dup (0)
+stack ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ds,ax
+		mov ax,0
+		call word ptr ds:[oeh]  ;ip=0 sp-2 sp=14 push ip 11 
+		inc ax
+		inc ax
+		inc ax
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+答案：ax的值为3
+
+（2）下面的程序执行后，ax和bx中的数值为多少？
+assume cs:code
+
+stack segment
+	dw 8 dup (0)
+stack ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov word ptr ss:[0],offset s
+		mov ss:[2],cs
+		call dword ptr ss:[0]
+		nop
+	s:	mov ax,offset s
+		sub ax,ss:[0ch]
+		mov bx,cs
+		sub bx,ss:[0eh]
+		
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+答案：bx的值为0，ax的值为1
+
+问题10.1
+下面的程序返回前，bx中的值是多少
+assume cs:code
+code segment
+start:	mov ax,1
+		mov cx,3
+		call s
+		mov bx,ax		;（bx）=?
+		mov ax,4c00h
+		int 21h
+	s:	add ax,ax
+	loop s
+		ret
+code ends
+end start
+答案:bx=8
+
+mul指令
+（1）想乘的两个数:要么都是8位，要么都是16位
+8位：al中的8位寄存器或内存字节单元中
+16位：ax中和16位寄存器或内存字单元中
+（2）结果
+8位：ax中
+16位：dx（高位），ax（低位）
+（3）格式
+mul reg（寄存器）
+mul 内存单元
+
+内存单元可以用不同的寻址方式给出：
+mul byte ptr ds:[0]
+含义为：（ax）=（al）*（（ds）*16+0）
+mul word ptr [bx+si+8]
+含义为：（ax）=（ax）*（（ds）*16+（bx）+（si）+8）结果的低16位
+		（dx）=（ax）*（（ds）*16+（bx）+（si）+8）结果的高16位
+		
+例题:
+（1）计算100*10
+方法一：以寄存器存放乘数
+assume cs:codesg
+
+codesg segment
+start:	mov al,100d
+		mov bl,10d
+		mul bl
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+方法二：以内存存放乘数
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 10d
+datasg segment
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov al,100d
+		mul ds:[0]
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+（2）计算100*10000
+方法一：以寄存器存放乘数
+assume cs:codesg
+
+codesg segment
+start:	mov ax,10000d
+		mov bx,100d
+		mul bx
+		
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+方法二：以内存存放乘数
+assume cs:codesg,ds:datasg
+
+datasg segment
+	dw 10000d
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov ax,100d
+		mul word ptr ds:[0]
+		
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+例题:计算data段中第一组数据的三次方，结果保存在后面的一组dword单元中
+assume cs:codesg,ds:datasg,ss:stacksg
+
+stacksg segment
+	db  0,0,0,0,0,0,0,0
+stacksg ends
+
+datasg segment
+	dw	1,2,3,4,5,6,7,8
+	dd	0,0,0,0,0,0,0,0
+datasg ends
+
+codesg segment
+start:	mov ax,stacksg
+		mov ss,ax
+		mov sp,8
+		mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		mov si,16
+	
+		mov cx,8
+	s:	mov ax,ds:[bx]
+		call far ptr cube
+		add bx,2
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+		t
+	cube:	push bx
+			mov bx,ax
+			mul bx
+			mul bx
+			pop bx
+			mov ds:[si],ax
+			mov ds:[si+2],dx
+			add si,4
+		ret
+codesg ends
+end start
+
+例题：将data段中的字符串转化为大写
+方法一：自己编程
+assume cs:codesg
+
+data segment
+	db 'conversation'
+data ends
+
+codesg segment
+start:	mov ax,data
+		mov ds:ax
+		mov bx,0
+		
+		mov cx,12
+	s:	call word ptr change
+		inc bx
+	loop s
+		
+	change:   mov al,ds:[bx]
+			  and al,11011111b
+			  mov ds:[bx],al
+		ret
+	
+	mov ax,4c00h
+	int 21h
+
+codesg ends
+end start
+方法二：书本答案
+assume cs:code
+
+data segment
+	db 'conversation'
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		mov si,0
+		mov cx,12
+		call capital
+		mov ax,4c00h
+		int 21h
+		
+capital:	and byte ptr [si],11011111b
+			inc si
+		loop capital
+		ret
+code ends
+end start
+
+例题：将一个全是字母，以0结尾的字符串，转化为大写，程序要处理的字符串以0作为结尾符，这个字符串可以如下定义：db ’conversation‘，0
+方法一：自己编写的程序
+assume cs:codesg,ds:datasg
+
+datasg segment
+	db 'conversation',0
+datasg ends
+
+codesg segment
+start:	mov ax,datasg
+		mov ds,ax
+		mov bx,0
+		
+	s:	mov cl,ds:[bx]
+		mov ch,0
+		jcxz ok
+		call far ptr change		;call far ptr 标号，call word ptr 内存地址 打错了会出现phase error between passes
+		inc bx
+	loop s						;这里改成jmp short capital更好
+
+change:	mov al,ds:[bx]
+		and al,11011111b
+		mov ds:[bx],al
+		ret
+		
+	ok:	mov ax,4c00h
+		int 21h
+codesg ends
+end start
+方法二：书本答案（答案更加严谨，自己编写存在cx等于一能通过jcxz ok 但在loop s处退出循环的情况）
+assume cs:code
+
+data segment
+	db 'conversation',0
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		mov si,0
+		call capital
+
+capital:	mov cl,ds:[si]
+			mov ch,0
+			jcxz ok
+			and byte ptr [si],11011111b
+			inc si
+			jmp short capital
+	ok:		ret
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+例题：将data段中的字符串全部转化为大写
+方法一：自己编译
+assume cs:code
+
+stack segment
+	dw 0,0,0,0,0,0,0,0
+stack ends
+
+data segment
+	db 'word',0
+	db 'unix',0
+	db 'wind',0
+	db 'good',0
+data ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ax,data
+		mov ds,ax
+		mov bx,0
+		
+		mov cx,4
+	s:	push cx
+	
+		s0:	 mov cl,ds:[bx]
+			 mov ch,0
+			 jcxz ok
+			 call far ptr capital			;call for ptr 会向栈中输入一个数据 此时（sp）=（sp）-2
+			 pop ax							;pop ax 是为了释放call for ptr 输入到栈中的值
+			 jmp short s0
+		ok:	 pop cx							;栈中的值在pop ax释放后才能去除cx的值
+			 inc bx
+			 
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+	
+		capital:  and cl,11011111b			;函数语句要放在结束语句后面，这样当loop s执行完后才能进入 mov ax,4c00h，不然还会进入capital
+				  mov ds:[bx],cl
+				  inc bx
+				  ret						;ret 会去除对应call for ptr输入的值，此时（sp）=（sp）+2，但是栈中的值并不会释放		
+	
+code ends
+end start
+方法二:书本答案
+assume cs:code
+
+data segment
+	db 'word',0
+	db 'unix',0
+	db 'wind',0
+	db 'good',0
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		mov bx,0
+		
+		mov cx,4
+	s:	mov si,bx
+		call capital
+		add bx,5
+		loop s
+		
+		mov ax,4c00h
+		int 21h
+
+capital:push cx							;方法二在子程序中进行堆栈，解决了call capital 数据入栈释放的麻烦
+		push si
+		
+change:	mov cl,[si]
+		mov ch,0
+		jcxz ok
+		and byte ptr [si],11011111b
+		inc si
+		jmp short capital
+		
+	ok:	pop si
+		pop cx
+		ret
+
+code ends
+end start
+			
+实验10
+（1）名称：show_str
+	 功能：在制定的位置，用指定的颜射，显示一个用0结束的字符串
+	 参数：（dh）=行号（取值范围0~24），（dl）=列号（取值范围0~79）
+		   （cl）=颜色，ds:si指向字符串的首地址
+	 返回：无
+	 应用举例：在屏幕的8行3列，用绿色显示打他段中的字符串
+assume cs:code
+
+stack segment
+	db 0,0,0,0
+stack ends
+
+data segment
+	db 'wellcome to masm!',0
+data ends
+
+code segment
+start:	mov dh,8
+		mov dl,3
+		mov cl,2
+		mov ax,data
+		mov ds,ax
+		mov si,0
+		call show_str
+		
+		mov ax,4c00h
+		int 21h
+show_str:	mov ax,stack
+			mov ss,ax
+			mov sp,4
+			mov al,dh
+			mov ah,0
+			sub ax,1
+			mov bx,160d
+			mul bx
+			mov bx,ax
+			push bx
+			mov al,dl
+			mov ah,0
+			sub ax,1
+			mov bx,2
+			mul bx
+			pop bx
+			mov bx,ax
+			mov ax,0b800h
+			mov es,ax
+			mov di,0
+			
+		s:	mov ch,0
+			push cx
+			mov cl,ds:[bx]
+			jcxz ok
+			mov byte ptr es:[bx+si],cl
+			inc bx
+			pop cx
+			mov byte ptr es:[bx],cl
+			inc si
+			jmp short s
+			
+		    ok:ret
+code ends
+end start
+
+标志寄存器：
+ZF标志:flag的第6位ZF,零标志位
+作用:它记录相关指令执行后	结果为0，ZF=1
+							结果不为0，ZF=0
+PF标志：flag的第2位是PF，奇偶标志位
+作用：它记录指令执行后，结果的所有二进制位中的1的个数	为偶数，PF=1
+														为奇数，PF=0
+SF标志：flag的第7位是SF，符号标志位
+作用：它记录指令执行后	结果为负：SF=1
+						结果为正：SF=0
+CF标志：flag的第0位是cf，进位标志符（无符标志符）
+作用：它记录指令执行后	结果进位（借位）：CF=1
+						结果没进位（借位）：CF=0
+OF标志：溢出标志符（有符标志符）-127~128
+作用：它记录指令执行后	结果溢出：OF=1
+						结果没溢出：OF=0
+						
+便于理解：
+OF overflow flag 溢出标志 操作数超出机器能表示的范围表示溢出,溢出时为1
+SF sign flag 符号标志 记录运算结果的符号，结果负时为1
+ZF zero flag 零标志 运算结果等于0时为1
+CF carry flag 进位标志 最高有效位产生进位时为1
+
+检测点11.1
+写出下面每条指令执行后，ZF、PF、SF等标志的值
+sub al,al	ZF= 1	PF=	1	SF= 0
+mov al,1	ZF=	0	PF=	0	SF= 0				;传送指令不影响标志位ZF= 1	PF=	1	SF= 0
+push ax		ZF=	0	PF=	0	SF= 0				;传送指令不影响标志位ZF= 1	PF=	1	SF= 0
+pop bx		ZF=	0	PF=	0	SF= 0				;传送指令不影响标志位ZF= 1	PF=	1	SF= 0
+add al,bl	ZF=	0	PF=	0	SF= 0
+add al,10	ZF=	0	PF=	1	SF= 1				;SF= 0
+mul al		ZF=	0	PF=	1	SF= 1				;SF= 0
+
+Debug中对标志寄存器的判断
+标志		值为1的标记			值为0的标记
+OF				OV					NV
+SF				NG					PL
+ZF				ZR					NZ
+PF				PE					PO
+CF				CY					NC
+DF				DN					UP
+
+举例：
+assume cs:code
+
+code segment
+start:	mov al,10001000b
+		add al,11110000b
+		
+		mov ax,4c00h
+		int 21h
+code ends
+end start
+分析：（1）对于无符号数来说最高位相加进位CF=1
+	  （2）对于有符号数来说 符号位相加后为0 无符号位相加为-136d 超过了有符号数的范围-128~127 发生溢出OF=1
+	  
+检测点11.2
+写出下面每天指令执行后,ZF、PF、SF、CF、OF等标志位的值
+				CF		OF 		SF		ZF		PF
+sub al,al		0		0		0		1		1
+mov al,10h		0		0		0		1		1
+add al,90h		0		0		1		0		1
+mov al,80h		0		0		1		0		1
+add al,80h		1		1		0		1		1
+mov al,0fch		1		1		0		1		1
+add al,05h		1		0		0		0		0
+mov al,7dh		1		0		0		0		0
+add al,0bh		0		1		1		0		1
+
+adc指令
+adc是带进位加法指令，它利用了CF位上记录的进位值
+指令：	adc ax,bx
+功能:	（ax）=（ax）+（bx）+CF
+
+例题：编程计算1EF000H+201000H,结果放在ax（高16位）和bx（低16位）中
+assume cs:code
+
+code segment
+start:	mov bx,0f000h
+		add bx,1000h
+		mov ax,1eh
+		adc ax,20h
+		
+	mov 4c00h
+	int 21h
+code ends
+end start
+
+例题：编程计算1EF0001000H+2010001EF0H,结果放在ax（高16位），bx（次高位），cx（低16位）中
+assume cs:code
+
+code segment
+start:	mov cx,1000h
+		add cx,1ef0h
+		mov bx,0f000h
+		adc bx,1000h
+		mov ax,1eh
+		adc ax,20
+		
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+例题：编写一个程序将128位数进行相加
+assume cs:code
+
+data segment
+	db 88h,88h,88h,88h,88h,88h,88h,88h,88h,88h,88h,88h,88h,88h,88h,88h
+	db 11h,11h,11h,11h,11h,11h,11h,11h,11h,11h,11h,11h,11h,11h,11h,11h
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		mov bx,0
+		
+		call mmp
+		
+		mov ax,4c00h
+		int 21h
+	mmp:	mov cx,16
+		s:	adc ds:[bx],11h
+			inc bx
+		loop s
+		ret
+code ends
+end start
+
+sbb指令
+格式：sbb 操作对象1，操作对象2
+功能：操作对象1=操作对象1-操作对象2-CF
+比如：sbb ax,bx
+实现功能：（ax）=（ax）-（bx）-CF
+
+例题：计算003E1000H-00202000H,结果放在ax，bx中
+assume cs:code
+
+code segment
+start:	mov bx,1000h
+		sub bx,2000h
+		mov ax,003Eh
+		sbb ax,0020h
+		
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+cmp指令
+格式：cmp 操作对象1,操作对象2
+功能：计算操作对象1-操作对象2 单并不保存结果，仅仅根据计算结果对标志寄存器进行设置
+
+例如：cmp ax,bx
+（1）（ax）=（bx）则（ax）-（bx）=0，多以：ZF=1；
+（2）（ax）！=（bx）则（ax）-（bx）！=0，所以：ZF=0
+（3）（ax）<（bx）则（ax）-（bx）将产生借位，所以：CF=1
+（4）（ax）>=（bx）则（ax）-（bx）不必借位，所以：CF=0
+（5）（ax）>（bx）则（ax）-（bx）既不必借位，结果又不为0，所以：CF=0并且ZF=0
+（6）（ax）<=（bx）则（ax）-（bx）既可能借位，结果可能为0，所以：CF=1或ZF=1
+
+cmp指令下SF的值
+（1）（ah）=1，（bh）=2：
+则（ah）-（bh）=0FFH，0FFH为-1的补码，因为结果为负，所以SF=1
+（2）（ah）=0FEH,（bx）=0FFH：
+则（ah）-（bh）=（-2）-（-1）=0FFH，因为结果为负，所以SF=1
+（3）（ah）=22H，（bh）=0A0H：
+则（ah）-（bh）=34-（-96）=130=82H，82H是-126的补码，所以SF=1
+*有符数据的情况下130超过了-128~127的范围，于是以-126补码的形式存在，此时SF=1
+
+cmp指令在SF，OF情况下判断
+（1）如果SF=1，OF=0
+OF=0,说明没有溢出，逻辑上真正结果的正负=实际结果的正负
+（2）如果SF=1,OF=1
+OF=1,说明有溢出，逻辑上真正的结果的正负！=实际结果的正负
+（3）如果SF=1,而OF=1
+OF=1,说明有溢出，逻辑上真正的结果的正负！=实际上的结果的正负
+
+指令			含义			检测的相关标志位
+je				等于则转移			ZF=1
+jne				不等于则转移		ZF=0
+jb				低于则转移			CF=1
+jnb				不低于则转移		CF=0
+ja				高于则转移			CF=0,ZF=0
+jna				不高于则转移		CF=1或ZF=1
+
+例题：编程若果（ah）=（bh）则（ah）=（ah）+（ah），否则（ah）=（ah）+（bh）
+assume cs:code
+
+code segment
+start:	mov ah,80h
+		mov bh,70h
+		call capital
+		
+	mov ax,4c00h
+	int 21h
+	
+capital:	cmp ah,bh
+			je s			;je逻辑上是“相等则转移”，单它进行的操作是，ZF=1则转移
+			add ah,bh
+			jmp short ok
+		s:	add ah,ah
+		ok:ret
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+分析：cmp指令可以和je配合着使用也可以不用配合，cmp ah,bh 是位ZF数值创造条件，这里cmp ah,bh 同样可以替代成mov ax,0 add ax,0 此时的ZF同样等于1
+
+例题：编写程序
+data 段中的8个字节如下：
+data segment
+	db 8,11,8,1,8,5,63,38
+data ends
+（1）编程：统计data段中数值为8的字节的个数，用ax保存统计结果
+assume cs:code
+
+data segment
+	db 8,11,8,1,8,5,63,38
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		call capital
+		
+	mov ax,4c00h
+	int 21h
+	
+capital:	mov bx,0
+			mov ax,0
+			mov dl,8
+			
+			mov cx,8
+	s0:		cmp byte ptr ds:[bx],dl
+			je s
+			jmp short ok
+		s:  inc ax
+		ok: inc bx					;inc bx 也是会改变标志寄存器里面的数值，所以位置放置要注意
+		loop s0
+		ret
+code ends
+end start
+（2）编写程序统计data段中数值大于8的字节的个数，用ax保存统计结果
+assume cs:code
+
+data segment
+	db 8,11,8,1,8,5,63,38
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		call capital
+		
+	mov ax,4c00h
+	int 21h
+			
+capital:	mov bx,0
+			mov ax.0
+			mov dl,8
+			
+			mov cx,8
+	s0:		cmp byte ptr ds:[bx],dl
+			ja s
+			jmp short ok
+		s:  inc ax
+		ok: inc bx
+		loop s0
+		ret
+code ends
+end start
+（3）编写程序统计data段中数值小于8的字节的个数，用ax保存统计结果
+assume cs:code
+
+data segment
+	db 8,11,8,1,8,5,63,38
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		call capital
+		
+	mov ax,4c00h
+	int 21h
+			
+capital:	mov bx,0
+			mov ax,0
+			mov dl,8
+			
+			mov cx,8
+	s0:		cmp byte ptr ds:[bx],dl
+			jb s
+			jmp short ok
+		s:  inc ax
+		ok: inc bx
+		loop s0
+		ret
+code ends
+end start
+
+检测点11.3
+（1）补全下面的程序，统计F000:0处32个字节中，大小在[32,128]数据的数
+		mov ax,0f000h
+		mov ds,ax
+		mov bx,0
+		mov dx,0
+		mov cx,32
+s:		mov al,[bx]
+		cmp	al,32
+		__________
+		cmp al,128
+		__________
+		inc dx
+s0:		inc bx
+		loop s
+答案：（1）jb s0
+	  （2）ja s0
+（2）补全下面的程序，统计F000:0处32个字节中，大小在（32，128）的数据的个数
+		mov ax,0f000h
+		mov ds,ax
+		
+		mov bx,0
+		mov dx,0
+		mov cx,32
+s:		mov al,[bx]
+		cmp al,32
+		__________
+		cmp al,128
+		__________
+		inc dx
+		inc bx
+s0:		inc bx
+		loop s
+答案：（1）jna s0
+	  （2）jnb s0
+	  
+flag的第10位是DF，方向标志位
+功能：在串处理指令中，控制每次操作后si，di的增减
+DF=0：每次操作后si，di递增
+DF=1：每次操作后si，di递减
+（1）格式1：movsb（字节）
+功能（1）（（es）*16+（di））=（（ds）*16+（si））
+	（2）如果DF=0则：（si）=（si）+1	（di）=（di）+1
+		 如果DF=1则：（si）=（si）-1	（di）=（di）-1
+（2）格式2：movsw（字）
+rep movsb或rep movsw作用是根据cx的值重复执行操作（类似loop）
+设置DF的指令：
+cld指令：将标志寄存器的DF设置为0
+std指令：将标志寄存器的DF设置为1
+
+例题（1）：用串传送指令，将data段中的第一个字符赋值到他后面的空间
+assume cs:code
+
+data segment
+	db 'wellcome to masm!'
+	db	16 dup (0)
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		mov es,ax
+		mov si,0
+		mov di,17
+		cld 
+		mov cx,16
+		rep movsb
+		
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+（2）用串传送指令，将F000H段中的最后16个字符复制到data段中
+assume cs:code
+
+data segment
+	db 16 dup (0)
+data ends
+
+code segment
+start:	mov ax,data
+		mov es,ax
+		mov di,15
+		mov ax,0f000h
+		mov ds,ax
+		mov si,0ffffh
+		mov cx,16
+		std
+		rep movsb
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+		
+pushf和popf
+pushf功能：将标志寄存器的值压栈
+popf功能：从栈中弹出数据，送入标志寄存器中
+
+检测点11.4
+执行下面程序后：（ax）=？
+	mov ax,0
+	push ax					;将ax入栈
+	popf					;将ax=0000 0000 0000 0000b存入标志寄存器
+	mov ax,0fff0h			
+	add ax,0010h			;标志寄存器发生变化CF=1（产生进位） PF=1（1的个数为偶数） ZF=1（16位数字为0） SF=0（结果位0 取正） OF=0（0fff0h补码为-16+0010原码为+16=0）
+	pushf					;标志寄存器数据入栈0000 0??? 010? 0101
+	pop ax					;将存入的标志寄存器数据出栈
+	and al,11000101b		;al=0100 0101 
+	and ah,00001000b		;ah=0000 0000
+答案：ax的值为45h
+提示：8086cpu的flag寄存器的结构图
+15	14	13	12	11	10	9	8	7	6	5	4	3	2	1	0
+				OF	DF	IF	TF	SF	ZF		AF		PF		CF
+
+中断的优先权顺序
+（1）除法错、溢出中断、软件中断
+（2）不可屏蔽中断
+（3）可屏蔽中断
+（4）单步中断
+中断向量表：cpu用8位的中断类型码通过中断向量表找到相应的中断处理程序的入口地址
+
+检测点12.1
+（1）用debug查看内存，情况如下
+0000:0000 68 10 A7 00 8B 01 70-16 00 9D 03 8B 01 70 00
+则三号中断源对应的中断处理程序的入口地址为：0070:018b
+
+(2) 存储N号中断源对应的中断处理程序入口的偏移地址的内存单元的地址为：(0000:[N*4])。
+存储N号中断源对应的中断处理程序入口的段地址的内存单元的地址为：(0000:[N*4+2])
+
+8086cpu的中断过程
+（1）（从终端信息中）取得中断类型码
+（2）标志寄存器的值入栈（保护标志位）
+（3）设置标志寄存器的第八位TF和第九位IF的值为0
+（4）cs的内容入栈
+（5）ip的内容入栈
+（6）从内存地址为中断类型码*4和中段类型码*4+2的两个字单元中读取中断处理程序的入口地址设置ip和cs
+用汇编语言表示：
+（1）取得中断类型码N
+（2）pushf
+（3）TF=0,IF=0
+（4）push CS
+（5）push IP
+（6）（IP）=（N*4），（CS）=（N*4+2）
+
+中断的全过程：
+（1）保存用到的寄存器
+（2）处理中断
+（3）恢复用到的寄存器
+（4）用iret指令返回
+iret指令的功能用汇编语法描述：
+pop IP
+pop CS
+popf
+
+例题：编写程序，在除法溢出时显示“wellcome to fishc.com”
+assume cs:code
+
+code segment
+start:	mov ax,cs
+		mov ds,ax
+		mov si,offset do
+		mov es,ax
+		mov di,200h
+		mov cx,offset doend - offset do
+		cld
+		rep movsb
+		
+		mov ax,0
+		mov es,ax
+		mov word ptr es:[0*4],200h
+		mov word ptr es:[0*4+2],0
+		
+		mov ax,4c00h
+		int 21h
+		
+	do:	jmp short dostart
+		db 'Wellcome to Fishc.com'
+dostart:	mov ax,cs
+			mov ds,ax
+			mov si,202
+		
+			mov ax,0b800h
+			mov es,ax
+			mov di,12*160+36*2
+		
+			mov cx,21
+		s:	mov al,ds:[si]
+			mov es:[di],al
+			inc si
+			inc di
+			mov byte ptr es:[di],02h
+			inc di
+		loop s
+doend:	nop
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+		
+单步中断：
+（1）取得中断类型码1
+（2）标志寄存器入栈 TF=0 IF=0
+（3）cs ip入栈
+（4）（ip）=（1*4） （cs）=（1*4+2）
+
+int指令
+格式：int n
+执行过程：
+（1）取得中断类型码N
+（2）标志寄存器入栈 TF=0 IF=0
+（3）cs ip入栈
+（4）（ip）=（N*4） （cs）=（N*4+2）
+
+例题：编写、安装中断7ch的中断例程，实现求一word型数据的平方
+int 7ch程序编写
+assume cs:code
+
+code segment
+start:	mov ax,cs
+		mov ds,ax
+		mov es,ax
+		mov si,offset do
+		mov di,200h
+		mov cx,offset doend - offset do
+		cld
+		rep movsb
+		
+		mov ax,0
+		mov es,ax
+		mov word ptr es:[7*4],200h
+		mov word ptr es:[7*4+2],0
+		
+		mov ax,4c00h
+		int 21h
+	
+	do:	mov bx,ax
+		mul bx
+		iret
+	doend: nop
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+主程序编写：
+assume cs:code
+
+code segment
+start:	mov ax,3456
+		int 7ch
+		add ax,ax
+		adc dx,dx
+		mov ax,4c00h
+		int 21h
+code ends
+end start
+总结：cpu执行int 指令进入中断例程之前，标志寄存器、当前的cs和ip被压入栈中，在执行中断例程后，应该用iret指令恢复int 执行前的标志寄存器个cs、ip的值，从而接着执行
+应用程序：
+（1）取得中断类型码N
+（2）标志寄存器入栈 TF=0 IF=0
+（3）cs ip入栈
+（4）（ip）=（N*4） （cs）=（N*4+2）
+（5）pop cs
+（6）pop ip
+（7）popf
+
+
+例题：编写、安装中断7ch的中断例程，实现讲一个全是字母，以0结尾的字符串，转化为大写
+assume cs:code
+
+code segment
+start:	mov ax,cs
+		mov ds,ax
+		mov es,ax
+		mov si,offset do
+		mov di,200h
+		mov cx,offset doend - offset do
+		cld
+		rep movsb
+		
+		mov ax,0
+		mov es,ax
+		mov word ptr es:[7*4],200h
+		mov word ptr es:[7*4+2],0
+		
+		mov ax,4c00h
+		int 21h
+	
+		
+	do:	push cx
+		push si						;单个程序不入栈没关系，但是作为调用函数，入栈是很有必要的，相当于局部变量
+	
+	dostart:	mov cl,ds:[bx]
+				mov ch,0
+				jcxz ok
+				and cl,11011111b
+				mov ds:[bx],cl
+				inc bx
+				jmp short dostart
+				
+		ok:	pop si
+			pop cx			
+			iret
+	doend:nop
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+主程序：
+assume cs:code
+
+data segment
+	bd 'wellcome to fishc.com',0
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		mov bx,0
+		int 7ch
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+例题：用int 7ch中断例程完成loop指令的功能（在屏幕上显示80个‘！’）
+assume cs:code
+
+code segment
+start:	mov ax,cs
+		mov ds,ax
+		mov es,ax
+		mov si,offset dostart
+		mov di,200h
+		mov cx,offset dostart - offset doend
+		cld
+		rep movsb
+		
+		mov ax,0
+		mov es,ax
+		mov word ptr es:[7*4],200h
+		mov word ptr es:[7*4+2],0
+		
+		mov ax,4c00h
+		int 21h
+		
+	dostart:	push bp				
+				mov bp,sp			;这里将bp的值零时代替sp，是为了防止在执行程序是把栈地址弄丢或弄错
+				dec cx
+				jcxz doend
+				add [bp+2],bx		;将bp入栈前分别将cs、ip、标志寄存器以标志寄存器、cs、ip的顺序入栈，这里bp+2对应地址的内容就是ip地址
+	doend:		pop bp
+	
+	iret							;这里是以ip、cs、标志寄存器的顺序出栈
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+主程序：
+assume cs:code
+
+code segment
+start:	mov ax,0b800h
+		mov es,ax
+		mov di,160*12
+		mov bx,offset s0start - offset s0end
+		mov cx,80
+	s0start:	mov byte ptr es:[di],'!'
+				add di,2
+				int 7ch						;这里在执行int 7ch的时候，下一条指令s0end的地址ip入栈
+	s0end: 		nop
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+检测点13.1
+（1）在上面的内容中，我们用7ch中断例程实现loop的功能，则上面的7ch中断例程所能进行的最大转移位移是多少？
+答案：loop指令实现的是段内的短转移为-128~127
+	  int指令用的是mov bx,s0start offset - s0end offset，bx为16位寄存器，能实现的转移为2^16
+（2）用7ch中断例程完成jmp near ptr s指令的功能，用bx向中断例程传送转移位移
+利用举例：用int 7ch中断例程完成loop指令的功能（在屏幕上显示80个‘！’）
+assume cs:code
+
+code segment
+start:	mov ax,cs
+		mov ds,ax
+		mov es,ax
+		mov si,offset dostart
+		mov di,200h
+		mov cx,offset dostart - offset doend
+		cld
+		rep movsb
+		
+		mov ax,0
+		mov es,ax
+		mov word ptr es:[7*4],200h
+		mov word ptr es:[7*4+2],0
+		
+		mov ax,4c00h
+		int 21h
+		
+	dostart:	push bp
+				mov bp,sp
+				add [bp+2],bx
+	doend:		pop bp
+				iret
+				
+		mov ax,4c00h
+		int 21h
+code ends
+end start
+	
+主程序：
+assume cs:code
+
+code segment
+start:	mov ax,0b800h
+		mov es,ax
+		mov di,160*12
+		mov bx,s0start offset - s0end offset
+		mov cx,80
+	s0start:	
+				mov byte ptr es:[di],'!'
+				add di,2
+				jcxz s0end
+				dec cx
+				int 7ch
+	s0end: 		nop
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+BIOS和DOS中断例程的安装过程
+（1）开机后，cpu一加电，初始化（cs）=0ffffh，（ip）=0，ffff:0处有一条跳转指令，cpu执行该指令后，转去执行BIOS中硬件系统检测和初始化程序
+（2）初始化程序将建立BIOS所支持的中断向量，即将BOIS提供的中断例程的入口地址登记在中断向量表中
+（3）硬件系统检测和初始化完成后，调用int 19h进行操作系统的引导。从此将计算机交由操作系统控制
+（4）DOS启动后，除完成其他工作外，还将他所提供的中断例程装入内存，并建立相应的中断向量
+
+检测点13.2
+（1）我们可以变成改变FFFF:0处的指令，使得cpu不去执行BIOS中的硬件系统检测和初始化程序
+（2）int 19h中断例程，可以由DOS提供
+
+BIOS和DOS提供的中断例程，都用ah来传递内部子程序的编号
+int 10h中断例程的设置光标位置功能
+	mov ah,2			;（ah）=2表示调用第10h中断例程的2号子程序，功能为设置光标的位置，可以提供光标所在的行号、列号、页号作为参数
+	mov	bh,0			;（bh）=0光标到第0页
+	mov dh,5			;（dh）=5光标第五行
+	mov dl,12			;（dl）=12光标第五列
+	int 10h
+int 10h中断例程的在光标位置显示字符功能
+	mov ah,9		;置光标
+	mov al,'a'		;字符
+	mov bl,7		;颜色属性
+	mov bh,0		;第0页
+	mov cx,3		;字符重复个数
+	int 10h
+	
+例题：在屏幕的5行12列显示3个红底高亮闪烁绿色的‘a’
+assume cs:code
+
+code segment
+start:	mov ah,2
+		mov bh,0
+		mov dh,5
+		mov dl,12
+		int 10h
+		
+		mov ah,9
+		mov al,'a'
+		mov bl,74d
+		mov bh,0
+		mov cx,3
+		int 10h
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+int 21h指令
+	mov ah,4ch		;程序返回
+	mov al,0		;返回值
+	int 21h
+int 21h中断例程的在光标位置显示字符串的功能
+	ds:dx指向字符串	;要显示的字符串需用“$”作为结束符
+					;功能号9，表示在光标位置显示字符串
+					
+例题：在屏幕的5列12行显示字符串“I love fishc.com！”
+assume cs:code
+
+data segment
+	bd 'I love Fishc.com','$'
+data ends
+
+code segment
+start:	mov ah,2
+		mov bh,0
+		mov dh,5
+		mov dl,12
+		int 10h
+
+		mov ax,data
+		mov ds,ax
+		mov dx,0
+		mov ah,9
+		int 21h
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+例题：
+（1）编写并安装int 7ch中断例程，功能为显示一个用0借位的字符串，中断例程安装在0：200处
+参数：（dh）=行号，（dl）=列号，（cl）=颜色，ds：di指向字符串首地址
+以上中断例程安装成功后，对下面的程序进行单步跟中，尤其注意观察int、iret指令执行前后cs、ip和栈中的状态
+assume cs:code
+
+code segment
+start:	mov ax,cs
+		mov ds,ax
+		mov ax,0
+		mov es,ax
+		mov si,offset dostart
+		mov di,200h
+		mov cx,offset doend-offset dostart
+		cld
+		rep movsb
+		
+		mov ax,0
+		mov es,ax
+		mov word ptr es:[7*4],200h
+		mov word ptr es:[7*4+2],0
+	
+	mov ax,4c00h
+	int 21h
+		
+dostart:	push cx
+			push si
+			push dx
+
+			mov ax,0b800h
+			mov es,ax
+			dec dh
+			mov al,160
+			mul dh
+			mov bx,ax
+			dec dl
+			mov al,2
+			mul dl
+			add bx,ax
+			mov al,cl
+			
+	s:		mov cl,ds:[si]
+			mov ch,0
+			mov es:[bx],cl
+			inc bx
+			mov es:[bx],al
+			inc si
+			jcxz ok
+			jmp short s
+			
+	ok:	pop dx
+		pop si
+		pop cx
+		iret
+	
+	doend:nop
+
+	mov ax,4c00h
+	int 21h
+
+code ends
+end start
+			
+主程序：
+assume cs:code
+
+data segment
+	db 'wellcome to masm!',0
+data ends
+
+code segment
+start:	mov dh,10
+		mov dl,10
+		mov cl,2
+		mov ax,data
+		mov ds,ax
+		mov si,0
+		int 7ch
+		
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+（2）编写并安装int 7ch中断例程，功能为完成loop指令的功能
+参数：（cx）=循环次数，（bx）=位移
+以上中断例程安装成功后，对下面的程序进行单步跟中，尤其注意观察int、iret指令执行前后cs、ip和栈中的状态
+子程序编写：
+assume cs:code
+
+code segment
+start:	mov ax,cs
+		mov ds,ax
+		mov si,offset do
+		mov ax,0
+		mov es,ax
+		mov di,200h
+		mov cx,offset do - offset doend
+		cld
+		rep movsb
+		
+		mov ax,0
+		mov es,ax
+		mov word ptr es:[7*4],200h
+		mov word ptr es:[7*4+2],0
+	
+	mov ax,4c00h
+	int 21h
+	
+do:		push di
+		push cx
+		push bx
+
+dostart:push bp
+		mov bp,sp
+		dec cx
+		jcxz ok
+		add [bp+8],bx
+	ok:	push bp
+		push bx
+		push cx
+		push di
+doend:	nop
+
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+		
+主程序编写：
+assume cs:code
+
+code segment
+start:	mov ax,0b800h
+		mov es,ax
+		mov di,160*12
+		mov bx,offset s - offset se
+		mov cx,80
+	s:	mov byte ptr es:[di],'!'
+		add di,2
+		int 7ch
+	se:	nop
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+（3）下面的程序，分别在屏幕的第2、4、6、8行显示4句英文诗，补全程序
+assume cs:code
+
+code segment
+	s1:	db 'Good,better,best,','$'
+	s2:	db 'Never let it rest','$'
+	s3:	db 'Till good is better','$'
+	s4: db 'And better,best,','$'
+	s:	dw offset s1,offset s2,offset s3,offset s4
+	row:db 2,4,6,8
+	
+start:	mov ax,cs
+		mov ds,ax
+		mov bx,offset s
+		mov cx,4
+	ok:	mov bh,0
+		mov dh,__________
+		mov dl,0
+		mov ah,2
+		int 10h
+		
+		mov dx,__________
+		mov ah,9
+		int 21h
+		__________
+		__________
+		loop ok
+		
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+端口的读写：端口的读写指令只有两条指令：in和out
+访问端口：
+（1）cpu通过地址先将地址信息60h发出
+（2）cpu通过控制线发出端口命令，选中端口所在的芯片，并通知它，将要从中读取数据
+（3）端口所在的芯片将60h端口中的数据通过数据送入cpu
+注意：在in和out指令中，只能使用ax和al来存放从端口中读入的数据或要发送到端口中的数据。访问8位端口时用al，访问16位端口时用ax
+对0~255以内的端口进行读写：
+in al,20h		;从20h端口读入一个字节
+out 20h,al		;往20h端口写入一个字节
+对256~65535的端口进行读写时，端口号放在dx中：
+mov dx,3f8h		;将端口号3f8送入dx
+in ax,dx		;从3f8h端口读入一个字节
+out dx,ax		;向3f8h端口写入一个字节
+总结：in out指令是指对端口中数据的输入输出都是8位数据，而端口地址好可以是8位（如20h）也可以是16位（如3f8h），两种情况下输入的格式有所不同
+
+cpu对CMOS RAM的读写分两步进行
+比如：读CMOS RAM的2号单元：
+（1）将2送入端口70h
+（2）从71h读处2号单元的内容
+
+shl和shr指令
+例（1）mov al,01001000b
+	   shl al,1			;将al中的数据左移一位
+执行后（al）=10010000b，CF=0
+例（2）mov al,01010001b
+	   mov cl,3
+	   shl al,cl
+执行后（al）=10001000b，CF=0	;移动为从左往右第三位
+
+CMOS RAM中，存放着当前时间：
+秒:00h
+分:02h
+时:04h
+日:07h
+月:08h
+年:09h
+BCD码：
+例如：数值26，用BCD码表示为
+		0010 0110
+BCD码值+30h=十进制数对应的ASCII码 		;这里是指的4位的BCD码+30H
+
+例题：编程在屏幕中间显示当前的月份
+assume cs:code
+
+code segment
+start:	mov al,8
+		out 70h,al
+		in al,71h
+		mov ah,al
+		mov cl,4
+		shr ah,cl
+		and al,00001111b
+		add al,30h
+		add ah,30h
+		mov bx,0b800h
+		mov es,bx
+		mov es:[160*12+40*2],al
+		mov es:[160*12+40*2+2],ah
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+检测点14.1
+（1）编程读取CMOS RAM的2号单元的内容
+assume cs:code
+
+code segment
+start:	mov al,2
+		out 70h,al
+		in al,71h
+	
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end start
+
+（2）编程向CMOS RAM的2号单元写入0
+assume cs:code
+
+code segment
+start:	mov al,2
+		out 70h,al
+		mov al,2
+		out 71h,al
+		
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end start
+
+检测点14.2
+编程用加法和位移指令计算（ax）=（ax）*10
+assume cs:code
+
+code segment
+start:	push ax
+		shl ax,1
+		mov bx,ax
+		push ax
+		mov cl,3
+		shl ax,3
+		add ax,bx
+		
+	mov ax,4c00h
+	int 21h
+	
+code ends
+end start
+
+实验14
+编程，以“年/月/日 时：分：秒”的格式，显示当前的时期、时间
+assume cs:code
+
+code segment
+start:	mov ax,0b800h
+		mov es,ax
+		mov bx,160*12+40*2
+		mov al,09h
+		out 70h,al
+		in al,71h
+		mov 
+
+		
+接口芯片和端口：cpu通过端口和外部设备进行联系的
+外中断信息：（1）可屏蔽中断：cpu可以不响应的外中断			;cpu是否响应可屏蔽中断，要看标志寄存器的IF位的设置
+			（2）不可屏蔽中断：cpu必须执行的中断
+	注意：将IF设置为0是为了在进入中断处理程序后，禁止其他的可屏蔽中断
+	
+当cpu检测到可屏蔽中断信号时：
+（1）如果IF=1，则cpu在执行完当前指令后响应中断，引发中断过程
+（2）如果IF=0，则不响应可屏蔽中断
+8086cpu设置IF的指令如下：
+（1）sti，用于设置IF=1
+（2）cli，用于设置IF=0
+
+pc机键盘的处理过程
+通码：按下一个键时产生的扫码称为通码
+断码：松开一个键时产生的扫码称为断码
+通码的第七位为1 断码的第七位为0
+断码 = 通码 + 80H
+
+当cpu收到并执行一个键盘通码时，IF由1变成0以次防止其他通码执行
+BIOS键盘缓存区中，一个键盘输入用一个字单元存放，高位字节存放扫描码，低位字节存放字符码
+
+int 9中断例程除了接受扫描码外，还要产生和扫描码对应的字符码，所以在BIOS键盘缓存区中，一个键盘输入用一个字节单元存放，高位字节存放扫面码，低位
+字节存放字符码
+0040:17单元存储键盘状态字节，该字节记录了控制键和切换键的状态。键盘状态字节各位记录的信息如下：
+
+键盘输入处理总结：
+（1）键盘产生扫描码
+（2）扫面码送入60H端口
+（3）一旦侦测到60H端口有动静，引发9号中断
+（4）cpu执行int9中断例程处理键盘输入
+
+例题：在屏幕中间依次显示“a”~“z”，并可以让人看清。在显示的过程中，按下esc键后，改变显示的颜色
+自己编写：assume cs:code
+
+data segment
+	dw 0,0
+data ends
+
+code segment
+start:	mov ax,0
+		mov es,ax
+		mov ax,data
+		mov ds,ax
+		mov ax,es:[9*4]
+		mov ds:[0],ax
+		mov ax,es:[9*4+2]
+		mov ds:[2],ax
+		
+		mov word ptr es:[9*4],offset int9
+		mov word ptr es:[9*4+2],cs
+		
+		
+		mov ax,0b800h
+		mov es,ax
+		mov bl,97d
+		
+				mov cx,26
+	character0:	mov al,bl
+				mov es:[160*12+40*2],al
+				call delay
+				inc bl
+	loop character0
+	
+		mov ax,0
+		mov es,ax
+		
+		mov ax,ds:[0]
+		mov es:[9*4],ax
+		mov ax,ds:[2]
+		mov es:[9*4+2],ax
+	
+	mov ax,4c00h
+	int 21h
+	
+	delay:	push cx
+			mov cx,5000h
+		s:	push cx
+			mov cx,5000h
+		s0:	nop
+		loop s0
+			pop cx
+		loop s
+			pop cx
+		ret
+		
+	int9: 	push es
+			push cx
+			push bx
+			push ax
+			
+			in al,60h
+			
+			pushf						;这里要两个pushf，一个为中断程序，另一个为将标志寄存器入栈后出栈到bx中
+			pushf
+			pop bx
+			and bh,11111100b
+			push bx
+			popf
+			call dword ptr ds:[0]
+			
+			cmp al,1
+			jne int9ret
+			
+			mov ax,0b800h
+			mov es,ax
+			inc byte ptr es:[160*12+40*2+1]
+			
+	int9ret:pop ax
+			pop bx
+			pop cx
+			pop es
+			iret
+			
+code ends
+end start
+标准答案：
+assume cs:code
+
+stack segment
+	db 128 dup (0)
+stack ends
+
+data segment
+	dw 0,0
+data ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,128
+		
+		mov ax,data
+		mov ds,ax
+		
+		mov ax,0
+		mov es,ax
+		
+		push es:[9*4]
+		pop ds:[0]
+		push es:[9*4+2]
+		pop ds:[2]
+		
+		mov word ptr es:[9*4],offset int9
+		mov es:[9*4+2],cs
+		
+		mov ax,0b800h
+		mov es,ax
+		mov ah,'a'
+	s:	mov es:[160*12+40*2],ah
+		call delay
+		inc ah
+		cmp ah,'z'
+		jna s
+		
+		mov ax,0
+		mov es,ax
+		
+		push ds:[0]
+		pop es:[9*4]
+		push ds:[2]
+		pop es:[9*4+2]
+		
+		mov ax,4c00h
+		int 21h
+		
+delay:	push ax
+		push dx
+		mov dx,1000h
+		mov ax,0
+	s1:	sub ax,1
+		sbb dx,0
+		cmp ax,0
+		jne s1
+		cmp dx,0
+		jne s1
+		pop dx
+		pop ax
+		ret
+		
+int9:	push ax
+		push bx
+		push es
+		
+		in al,60h
+		
+		pushf
+		pushf
+		pop bx
+		and bh,11111100b
+		push bx
+		popf
+		call dword ptr ds:[0]
+		
+		cmp al,3bh
+		jne int9ret
+		
+		mov ax,0b800h
+		mov es,ax
+		inc byte ptr es:[160*12+40*2+1]
+		
+int9ret:pop es
+		pop bx
+		pop ax
+		iret
+		
+code ends
+end start
+
+检测点15.1
+（1）仔细分析一下上面的int9中断例程，看看是否可以精简一下？
+其实在我们的int9中断例程中，模拟int指令调用原来int9中断例程的程序段是可以精简的，因为在进入中断例程后，IF和TF都已经置0，没有不要再进行设置。
+程序段：
+		pushf
+		pushf
+		pop ax
+		and ah,11111100b
+		push ax
+		popf
+		call dword ptr ds:[0]
+可以精简为：
+		pushf
+		call dword ptr ds:[0]
+总结：解答：因为是在int9中调用原来的int 9中断例程，而在我们进入int9这个中断程序时要做以下步骤： 
+（1_1）取得中断类型码N；   
+（1_2）标志寄存器入栈，TF=0、IF=0；   
+（1_3）CS、IP入栈；   
+（1_4）（IP）=（N*4），（CS）=（N*4+2）。  
+当做完以上步骤再来执行程序。在执行程序得 过程中需要调用原来的int 9中断例程。所以也要进行相应的设置：
+
+（2_1）取得中断类型码N；   
+（2_2）标志寄存器入栈，TF=0、IF=0；   
+（2_3）CS、IP入栈；   
+（2_4）（IP）=（N*4），（CS）=（N*4+2）。  
+但是我们知道在（1_2)时已经把tf、if设置为0 。所以（2_2)这一步的设置tf、if为0可以省略掉了.第二个pushf不需要
+	
+
+（2）仔细分析上面的主程序，看看有什么潜在的问题
+中断9除了用于键盘外，还会使用在其他地方，你修改中断9时，并非发生了键盘中断，而是发生了其他的硬件中断。
+任何时候修改硬件中断时一定要关中断，这绝对是必要的
+程序段：
+		mov word ptr es:[9*4],offset int9
+		mov es:[9*4+2],cs
+修改后：
+		cli
+		mov word ptr es:[9*4],offset int9
+		mov es:[9*4+2],cs
+		sti
+		
+例题：安装一个新的int 9中断例程
+功能：在dos下按	F1键后改变当前屏幕的显示颜色，其他的键照常处理
+课本答案：此程序可以编译，和运行，但是并不能达到效果，编译码覆盖了机器原来的int 9程序导致键盘无法在debug中输入
+assume cs:code
+
+stack segment
+	db 128 dup (0)
+stack ends
+	
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,128
+		
+		mov ax,0
+		mov es,ax
+		
+		push es:[9*4]
+		pop es:[200h]
+		push es:[9*4+2]
+		pop es:[202h]
+		
+		mov ax,cs
+		mov ds,ax
+		mov cx,offset doend - offset do
+		mov si,offset do
+		mov di,204h
+		
+		cld
+		rep movsb
+		
+		cli
+		mov ax,0
+		mov es,ax
+		mov word ptr es:[9*4],204h
+		mov word ptr es:[9*4+2],0
+		sti
+		
+	mov ax,4c00h
+	int 21h
+	
+do:			push es
+			push cx
+			push bx
+			push ax
+
+dostart:	in al,60h
+
+			pushf
+			call dword ptr cs:[0]
+
+			mov ax,0b800h
+			mov es,ax
+			mov bx,1
+			
+			cmp al,3bh
+			jne doend
+			mov cx,2000
+		s:	inc byte ptr es:[bx]
+			add bx,2
+		loop s
+				
+doend:		pop ax
+			pop bx
+			pop cx
+			pop es
+			iret
+	
+	mov ax,4c00h
+	int 21h
+
+code ends
+end start
+网上可执行答案：
+assume cs:code
+
+stack segment
+db 30h dup(0)
+stack ends
+
+data segment
+db 20h dup(0)
+data ends
+
+
+code segment
+start: 
+
+    mov ax,0
+    mov es,ax
+    mov di,200h
+    mov ds,ax
+    mov si,[9*4]
+    mov cx,4
+    cld
+    rep movsb
+    
+    mov ax,cs
+    mov ds,ax
+    mov si,offset s
+    mov cx,offset se - offset s;设置从标号sqrend到标号sqr的转移位移
+    cld
+    rep movsb
+    mov word ptr es:[9*4],200h
+    mov word ptr es:[9*4+2],0
+    
+    mov ax,4c00h
+    int 21h
+    
+    
+    s:
+    push ax
+    push es
+    mov ax,0b800h
+    mov es,ax
+    push cx
+    mov cx,2000
+    push bx
+    mov bx,1
+    in al,60h
+    cmp al,3bh
+    jne s1
+    s0:
+;    add byte ptr es:[bx],10h
+    inc byte ptr es:[bx]
+    add bx,2
+    loop s0
+    s1:
+    int 80h
+    pop bx
+    pop cx
+    pop es
+    pop ax
+    iret
+    se:nop
+    
+    
+    mov ax,4c00h
+    int 21h
+
+
+code ends
+end start
+
+直接定址表
+assume cs:code
+
+code segment
+	a: db 1,2,3,4,5,6,7,8			;这里的a和b只能表示内存地址位置
+	b: dw 0
+start:	mov si,offset a
+		mov bx,offset b
+		mov cx,8
+	s:	mov al,cs:[si]
+		mov ah,0
+		add cs:[bx],ax
+		inc si
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+
+code ends
+end start

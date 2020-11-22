@@ -1,0 +1,344 @@
+检测点1.1
+（1）1个cpu的寻址能力为8kb，那么他的地址总线的宽度为13
+（2）1kb的寄存器有1024个存储单元。存储单元的编号从0到1023
+（3）1kb的寄存器可以存储2^13个bit，2^10个Byte
+（4）1GB.1MB.1KB分别是2^30.2^20.2^10Byte
+（5）8080.8088.80286.80386的地址总线的宽度分别为16根.20根.24根.32根，则他们的寻址能力分别为64KB,1MB.16MB.4G
+（6）8080.8088.8086.80286.80386的数据总线宽度为8根.8根.16根.16根.32根，则他们一次可以传送的数据为2^8B,2^8B,2^16B,2^16B,2^32B
+（7）从内存中读取1024字节的数据，8086至少要读4，80386至少要读1次
+（8）在存储器中，数据和程序以16进制形式存放
+
+改错：
+（6）8080.8088.8086.80286.80386的数据总线宽度为8根.8根.16根.16根.32根，则他们一次可以传送的数据为1B.2B.2B.4B
+解答：数据总线的宽度决定了cpu和完结的数据传输能力，1 根数据总线一次可以传输1 bit 
+			8 根总线的传送数据为 8 bit  = 1 B
+            16根总线的传送数据为 16 bit = 2 B
+            32根总线的传送数据为 32 bit = 4 B
+	
+（7）从内存中读取1024字节的数据，8086至少要读512，80386至少要读256次
+解答：1024字节为1024 Byte. 8086 （16根数据总线）传送数据为：一次 2 Byte  80386（32根数据总线） 为 4 Byte
+
+（8）在存储器中，数据和程序以16进制形式存放
+解答: 二进制
+			内存的数据都以bit形式存在
+
+检测点2.1
+（1）写出每条汇编指令执行后相关寄存器中的值
+	mov ax,62627	AX=F4A3H
+	mov ah,31H		AX=31A3H
+	mov al,23H		AX=3123H
+	add ax,ax		AX=6246H
+	mov bx,826CH	BX=826CH
+	mov cx,ax		CX=6246H
+	mov ax,bx		AX=826CH
+	add ax,bx		AX=04DBH
+	mov al,bh		AX=0482H
+	mov ah,bl		AX=6C82H
+	add ah,ah		AX=D882H
+	add al,6		AX=D888H
+	add al,al		AX=D810H
+	mov ax,cx		AX=6246H
+（2）只能使用目前学过的汇编指令，最多使用4条指令，编程计算2的四次方
+	mov ax,2
+	add ax,ax
+	add ax,ax
+	add ax,ax
+	
+检测点2.2
+（1）给定段地址为0001H，仅通过变化偏移地址寻址，cpu的寻址范围为0010H到FFFFH
+（2）有一数据存放内存20000H单元中，现给定段地址为SA，若想用偏移地址寻到此单元。则SA应满足的条件是：最小为1001H,最大值2000H
+
+改错：
+（1）给定段地址为0001H，仅通过变化偏移地址寻址，cpu的寻址范围为0010H到100fH
+解答：范围为段地址*16+偏移地址
+		范围最小值：0010H*16+0000H=0010H
+		范围最大值：0010H*16+FFFFH=100FH
+		
+检测点2.3
+（1）下面的三条指令执行后，cpu几次修改IP？都是在什么时候？最后IP中的值是多少？
+	mov ax,bx
+	mov ax,ax
+	jmp ax
+答：cpu中3次修改ip值，分别在执行三条语句时，ip左后的值为ax
+
+检测点9.1
+（1）程序如下
+assume cs:code
+
+data segment
+	____________
+data ends
+
+code segment
+start:	mov ax data
+		mov ds,ax
+		mov bx,0
+		jmp word ptr [bx+1]				;word ptr [bx+1]指的是一个字单元，也就是说是2个字节，也就是说在data段中是第2和第3个字节
+code ends
+end start
+弱要使程序中的jmp指令执行后，CS:IP指向第一条指令，在data段中应该定义哪些数据
+答:data segment
+		dw xx,0,xx....		（第二个数据的值为0）
+		data ends
+程序分析：
+    1) 这个指令jmp word ptr [bx+1]是一个段内近转移，它只是修改了ip的值。它的转移地址在内存中。明确：[bx+1]在此例子中是只的data段的第二个字节。
+    2）我们发现ds：bx指向了data段，word ptr [bx+1]指向的是data段中的第二个字节开始的字单元，也就是说它所指向的该字单元的内容。这个内容就是jmp跳转的偏移地址。
+    3）word ptr [bx+1]指的是一个字单元，也就是说是2个字节，也就是说在data段中是第2和第3个字节，如果jmp转移到程序第一条指令，也就是说ip的值应为：00 00即可；我们要保证这二个
+	字节的值是00 00就行。
+    4）要想jmp跳转到start标号处，它的ip值是offset start即可（在汇编语言层面我们也不必关心它们代表的具体ip值是多少）；也就是说：（ds：[bx+1]）==offset start，那么在data段中
+	定义的第二个字节必须是offset start。至于offset start具体代表的二进制码是什么，那是编译器的事情。
+	5)简单来说就是，只要ds:[bx+1]起始地址的两个字节为0就可以了
+	
+（2）程序如下
+assume cs:code
+
+data segment
+	dd 12345678H
+data ends
+
+code segment
+start:	mov ax,data
+		mov ds,ax
+		mov bx,0
+		mov [bx],____
+		mov [bx+2],____
+		jmp dword ptr ds:[0]		;dword ptr ds:[0]指的是一个双字单元，也就是说是两个字，也就是说在data段中2~3字高16位表示段地址cs，0~1字低16位表示偏移地址ip
+code ends
+end start
+答案	mov	[bx],offset start（bx.0000h）			;这里只要代表偏移地址是零就行
+		mov [bx+2],code（cs）						;这里只要代表段地址是零就行
+分析 1）在data段中定义了一个双字的值，占用4个字节，内存中是12 34 56 78
+     2）jmp dword ptr ds:[0]代表的含义是，此指令是段间转移的指令，cs和ip是存储在一个双字的单元中，其中高16位存储的是cs值，低16位存储的是ip值。
+     3） [bx]代表了低16位的值==ip。[bx+2]代表了高16位的值==cs。
+     4）也就是说保证data段中前2个字节是ip的值，第3,4字节是cs的值就可以
+
+（3）用debug查看内存单元结果如下
+2000:1000 BE 00 06 00 00 00 ....
+则此时，CPU执行指令：
+	mov ax,2000h
+	mov es,ax
+	jmp dword ptr es:[1000h]
+后，（cs）=	0006	（ip）=00BE
+整个程序：
+assume cs:codesg
+
+codesg segment
+start:	mov ax,2000h
+		mov ds,ax
+		mov bx,1000h
+		mov al,190d
+		mov ds:[bx],al
+		mov al,06
+		mov ds:[bx+2],al
+		
+		mov ax,2000h
+		mov es,ax
+		jmp dword ptr es:[1000h]
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+检测点9.2
+补全编程，利用jcxz指令，实现在内存段中查找第一个值为0的自己，找到后，将他的偏移地址存放在dx中
+assume cs:code
+
+code segment
+start:	mov ax,2000h
+		mov ds,ax
+		mov bx,0
+	s:	__________
+		__________
+		__________
+		__________
+		jmp short s
+	ok:	mov dx,bx
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+答案：
+		mov cl,ds:[bx]	;这里不能写成 mov byte ptr cx,ds:[bx] 
+		mov ch,0
+		jcxz ok
+		inc bx
+		
+检测点9.3
+补全编程，利用loop指令，实现在内存2000h段中查找第一个为0的字节，找到后，将他的偏移地址存储在dx中
+assume cs:code
+
+code segment
+start:	mov ax,2000h
+		mov ds,ax
+		mov bx,0
+	s:	mov cl,[bx]
+		mov ch,0
+		__________
+		inc bx
+	loop s
+	
+	ok:	dec bx			;dec指令的功能和inc相反，dec bx进行的操作为：（bx）=（bx）-1
+		mov dx,bx
+		
+	mov 4c00h
+	int 21h
+code ends
+end start
+答案：
+		inc cx
+		
+检测点10.1
+补全程序，实现从内存1000：0000处开始执行指令
+assume cs:code
+
+stack segment
+	db 16 dup （0）
+stack ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ax,__________
+		push ax
+		mov ax,__________
+		push ax
+		retf
+code ends
+end start
+答案：	mov ax,1000h
+		mov ax,0
+
+检测点10.2
+下面的程序执行后，ax中的数值为多少？
+内存地址		机器码			汇编指令
+1000:0			b8 00 00		mov ax,0
+1000:3			e8 01 00		call s
+1000:6			40				inc ax
+1000:7			58				s:pop ax
+答案：ax的值为6
+
+检测点10.3
+下面的程序执行后，ax中的数值为多少？
+内存地址		机器码			汇编指令
+1000:0			b8 00 00		mov ax,0
+1000:3			9a 09 00 00 10	call far ptr s
+1000:8			40				inc ax
+1000:9			58				s:pop ax
+								add ax,ax
+								pop bx
+								add ax,bx
+答案：ax的值为1016
+
+检测点10.4
+下面的程序执行后，ax中的数值为多少？
+内存地址		机器码			汇编指令
+1000:0			b8 06 00		mov ax,6
+1000:3			ff d0			call ax    
+1000:5			40				inc ax
+1000:6							mov bp,sp			;sp和bp的区别在于sp只能指向栈定，而bp可以指向栈中的其他位置
+								add ax,[bp]
+答案：ax的值为11
+
+检测点10.5
+（1）下面的程序执行后，ax中的值为多少
+assume cs:code
+
+stack segment
+	dw 8 dup (0)
+stack ends
+
+code segment
+start:	mov ax,stack
+		mov ss,ax
+		mov sp,16
+		mov ds,ax
+		mov ax,0
+		call word ptr ds:[oeh]  ;ip=0 sp-2 sp=14 push ip 11 
+		inc ax
+		inc ax
+		inc ax
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+答案：ax的值为3
+
+检测点11.1
+写出下面每条指令执行后，ZF、PF、SF等标志的值
+sub al,al	ZF= 1	PF=	1	SF= 0
+mov al,1	ZF=	0	PF=	0	SF= 0				;传送指令不影响标志位ZF= 1	PF=	1	SF= 0
+push ax		ZF=	0	PF=	0	SF= 0				;传送指令不影响标志位ZF= 1	PF=	1	SF= 0
+pop bx		ZF=	0	PF=	0	SF= 0				;传送指令不影响标志位ZF= 1	PF=	1	SF= 0
+add al,bl	ZF=	0	PF=	0	SF= 0
+add al,10	ZF=	0	PF=	1	SF= 1				;SF= 0
+mul al		ZF=	0	PF=	1	SF= 1				;SF= 0
+
+检测点11.2
+写出下面每天指令执行后,ZF、PF、SF、CF、OF等标志位的值
+				CF		OF 		SF		ZF		PF
+sub al,al		0		0		0		1		1
+mov al,10h		0		0		0		1		1
+add al,90h		0		0		1		0		1
+mov al,80h		0		0		1		0		1
+add al,80h		1		1		0		1		1
+mov al,0fch		1		1		0		1		1
+add al,05h		1		0		0		0		0
+mov al,7dh		1		0		0		0		0
+add al,0bh		0		1		1		0		1
+
+检测点11.3
+（1）补全下面的程序，统计F000:0处32个字节中，大小在[32,128]数据的数
+		mov ax,0f000h
+		mov ds,ax
+		mov bx,0
+		mov dx,0
+		mov cx,32
+s:		mov al,[bx]
+		cmp	al,32
+		__________
+		cmp al,128
+		__________
+		inc dx
+s0:		inc bx
+		loop s
+答案：（1）jb s0
+	  （2）ja s0
+（2）补全下面的程序，统计F000:0处32个字节中，大小在（32，128）的数据的个数
+		mov ax,0f000h
+		mov ds,ax
+		
+		mov bx,0
+		mov dx,0
+		mov cx,32
+s:		mov al,[bx]
+		cmp al,32
+		__________
+		cmp al,128
+		__________
+		inc dx
+		inc bx
+s0:		inc bx
+		loop s
+答案：（1）jna s0
+	  （2）jnb s0
+	  
+检测点11.4
+执行下面程序后：（ax）=？
+	mov ax,0
+	push ax					;将ax入栈
+	popf					;将ax=0000 0000 0000 0000b存入标志寄存器
+	mov ax,0fff0h			
+	add ax,0010h			;标志寄存器发生变化CF=1（产生进位） PF=1（1的个数为偶数） ZF=1（16位数字为0） SF=0（结果位0 取正） OF=0（0fff0h补码为-16+0010原码为+16=0）
+	pushf					;标志寄存器数据入栈0000 0??? 010? 0101
+	pop ax					;将存入的标志寄存器数据出栈
+	and al,11000101b		;al=0100 0101 
+	and ah,00001000b		;ah=0000 0000
+答案：ax的值为45h
+提示：8086cpu的flag寄存器的结构图
+15	14	13	12	11	10	9	8	7	6	5	4	3	2	1	0
+				OF	DF	IF	TF	SF	ZF		AF		PF		CF
+			
+		
