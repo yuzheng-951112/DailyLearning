@@ -6,26 +6,7 @@ ARP介绍：
 (2)地址解析(ARP)为这IP地址和MAC地址这两种不同地址形式提供映射：32bit的IP地址和数据链路层使用的任何类型的地址
 (3)ARP为IP地址到对应的硬件地址之间提供动态映射。
 (4)RARP是被那些没有磁盘驱动器的系统使用，他需要系统管理员进行手动设置。
-4.2 ARP试验
-	试验一：PC0向PC1发送邮件
- 
-（a）PC0广播	（b）Router5->PC0
- 
-（c）PC0->Router5(ICMP)	（d）Router5广播
- 	 
-（e）hub接收并发送广播	（f）hub->PC1(PC2、PC3)广播
- 	 
-（g）PC1->hub广播	（h）hub->Router5广播(hub特性广播)
- 
-3PC、1Router和1hub
-	(1)在(a)中P0发送广播目的MAC地址FFFF.FFFF.FFFF，源MAC地址为PC0的MAC地址。
-	(2)在(b)中Router5Fa0/0->P0源IP、目的IP不变，源MAC地址为Router0Fa0/0的MAC地址，目的MAC为P0的MAC地址
-	(3)在(c)中P0-> Router5Fa0/0发送单播目的MAC地址0001.0001.0001，源MAC地址为PC0的MAC地址
-	(4)在(d)中Router5 Fa0/1发送广播目的MAC地址FFFF.FFFF.FFFF，源MAC地址为Router5 Fa0/1的MAC地址
-(5)在(e)中hub接收Router5 Fa0/1发送的广播并发送出去。
-(6)在(f)中hub发送广播道PC1、PC2、PC3。
-(7)在(g)(h)中PC1发送广播到集线器，集线器发送广播道PC2	、PC3、Router5
-4.3 ARP的分组格式
+4.2 ARP的分组格式
  
 ARP格式分析：
 (1)	以太网源、目的地址
@@ -39,3 +20,42 @@ ARP格式分析：
 
  
 这样的高速缓存是有时限的，一般是20分钟(伯克利系统的衍生系统)。
+
+4.3 代理ARP试验
+	试验一：PC0向PC1发送邮件
+ 
+（a）PC0广播	（b）Router5->PC0
+ 
+（c）PC0->Router5(ICMP)	（d）Router5广播
+ 
+（e）hub接收并发送广播	（f）hub->PC1(PC2、PC3)广播
+ 	 
+（g）PC1->hub广播	（h）hub->Router5广播(hub特性广播)
+ 
+3PC、1Router和1hub
+	(1)在(a)中P0发送广播目的MAC地址FFFF.FFFF.FFFF，源MAC地址为PC0的MAC地址。
+	(2)在(b)中Router5Fa0/0->P0源IP、目的IP不变，源MAC地址为Router0Fa0/0的MAC地址，目的MAC为P0的MAC地址
+	(3)在(c)中P0-> Router5Fa0/0发送单播目的MAC地址0001.0001.0001，源MAC地址为PC0的MAC地址
+	(4)在(d)中Router5 Fa0/1发送广播目的MAC地址FFFF.FFFF.FFFF，源MAC地址为Router5 Fa0/1的MAC地址
+(5)在(e)中hub接收Router5 Fa0/1发送的广播并发送出去。
+(6)在(f)中hub发送广播道PC1、PC2、PC3。
+(7)在(g)(h)中PC1发送广播到集线器，集线器发送广播道PC2	、PC3、Router5
+4.4 免费ARP
+免费ARP作用
+(1)验证IP是否冲突：一个主机可以通过它来确定另一主机是否设置了相同的IP地址。发送主机不需要一定收到此请求的回答。假设收到一个回答，表示网络中存在与自身相同的主机。假设没有收到回答，则表示本机使用的IP与网络中其他主机并不冲突。
+(2) 更换物理网卡:假设发送ARP的主机正好改变了物理地址（如更换物理网卡），能够使用此方法通知网络中其他主机及时更新ARP缓存
+如果发送免费ARP
+试验二：
+ 
+（a）PC0->PC0(免费ARP)	（b）PC1->PC1(免费ARP)
+  	 
+（c）PC0->PC1(免费ARP)	（d）PC1->PC0（免费ARP）
+   
+（e）PC0->PC1(ARP请求广播)	(f)PC1->PC2(ARP请求单播)
+ 	 
+（g）PC0->PC1(ARP请求广播)	(h)PC1->PC2(ARP请求单播)
+ 
+免费ARP
+以PC0为例对免费ARP进行分析:
+(1)对于(a)(b)(c)(d)而言，arp缓存全是空的，但在实际情况中，电脑一开机就会发送免费arp，或者在arp缓存超时、更新硬件(软件)地址后(例如PC0换了网卡)或重启计算机，将会重新发送免费arp给PC1，此时PC1发现与PC0地址不冲突，会更新自己的arp缓存，并丢弃免费arp，这个试验中如果重启PC0网卡，则PC0重启后首先会发送免费arp，PC1接收后确认、刷新arp高速缓存(无论PC1网卡是否改变)后丢弃。
+(2)免费arp返送完后，PC0接着会发送arp请求，PC1在此刷新高速缓存，然后给PC0以arp回应，PC0接收到arp回应后刷新arp高速缓存，然后PC0与PC1单播通信。
